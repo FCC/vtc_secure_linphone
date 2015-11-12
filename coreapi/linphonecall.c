@@ -297,7 +297,7 @@ bool_t is_payload_type_number_available(const MSList *l, int number, const Paylo
 static void linphone_core_assign_payload_type_numbers(LinphoneCore *lc, MSList *codecs){
 	MSList *elem;
 	int dyn_number=lc->codecs_conf.dyn_pt;
-	int t140_payload_type_number = 0;
+	PayloadType *red = NULL, *t140 = NULL;
 	
 	for (elem=codecs; elem!=NULL; elem=elem->next){
 		PayloadType *pt=(PayloadType*)elem->data;
@@ -325,18 +325,18 @@ static void linphone_core_assign_payload_type_numbers(LinphoneCore *lc, MSList *
 				payload_type_set_enable(pt, FALSE);
 			}
 		}
+		
 		if (strcmp(pt->mime_type, payload_type_t140_red.mime_type) == 0) {
-			if (number == -1) {
-				t140_payload_type_number = dyn_number;
-			} else {
-				t140_payload_type_number = number;
-			}
-			
-			if (t140_payload_type_number > 0) {
-				const char *red_fmtp = ms_strdup_printf("%i/%i/%i", t140_payload_type_number, t140_payload_type_number, t140_payload_type_number);
-				payload_type_set_recv_fmtp(pt, red_fmtp);
-			}
+			red = pt;
+		} else if (strcmp(pt->mime_type, payload_type_t140.mime_type) == 0) {
+			t140 = pt;
 		}
+	}
+	
+	if (t140 && red) {
+		int t140_payload_type_number = payload_type_get_number(t140);
+		const char *red_fmtp = ms_strdup_printf("%i/%i/%i", t140_payload_type_number, t140_payload_type_number, t140_payload_type_number);
+		payload_type_set_recv_fmtp(red, red_fmtp);
 	}
 }
 
@@ -659,6 +659,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 	CodecConstraints codec_hints={0};
 	LinphoneCallParams *params = call->params;
 	LinphoneCore *lc = call->core;
+	bool_t rtcp_mux = lp_config_get_int(lc->config, "rtp", "rtcp_mux", 0);
 
 	/*multicast is only set in case of outgoing call*/
 	if (call->dir == LinphoneCallOutgoing && linphone_call_params_audio_multicast_enabled(params)) {
@@ -709,6 +710,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 		md->streams[call->main_audio_stream_index].proto=get_proto_from_call_params(params);
 		md->streams[call->main_audio_stream_index].dir=get_audio_dir_from_call_params(params);
 		md->streams[call->main_audio_stream_index].type=SalAudio;
+		md->streams[call->main_audio_stream_index].rtcp_mux = rtcp_mux;
 		if (params->down_ptime)
 			md->streams[call->main_audio_stream_index].ptime=params->down_ptime;
 		else
@@ -739,6 +741,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 	md->streams[call->main_video_stream_index].proto=md->streams[call->main_audio_stream_index].proto;
 	md->streams[call->main_video_stream_index].dir=get_video_dir_from_call_params(params);
 	md->streams[call->main_video_stream_index].type=SalVideo;
+	md->streams[call->main_video_stream_index].rtcp_mux = rtcp_mux;
 	strncpy(md->streams[call->main_video_stream_index].name,"Video",sizeof(md->streams[call->main_video_stream_index].name)-1);
 
 	if (params->has_video){
@@ -771,6 +774,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 	md->streams[call->main_text_stream_index].proto=md->streams[call->main_audio_stream_index].proto;
 	md->streams[call->main_text_stream_index].dir=SalStreamSendRecv;
 	md->streams[call->main_text_stream_index].type=SalText;
+	md->streams[call->main_text_stream_index].rtcp_mux = rtcp_mux;
 	strncpy(md->streams[call->main_text_stream_index].name,"Text",sizeof(md->streams[call->main_text_stream_index].name)-1);
 	if (params->realtimetext_enabled) {
 		strncpy(md->streams[call->main_text_stream_index].rtp_addr,linphone_call_get_public_ip_for_stream(call,call->main_text_stream_index),sizeof(md->streams[call->main_text_stream_index].rtp_addr));
@@ -3002,6 +3006,7 @@ static void linphone_call_start_audio_stream(LinphoneCall *call, LinphoneCallSta
 								ms_qos_analyzer_algorithm_from_string(linphone_core_get_adaptive_rate_algorithm(lc)));
 			audio_stream_enable_adaptive_jittcomp(call->audiostream, linphone_core_audio_adaptive_jittcomp_enabled(lc));
 			rtp_session_set_jitter_compensation(call->audiostream->ms.sessions.rtp_session,linphone_core_get_audio_jittcomp(lc));
+			rtp_session_enable_rtcp_mux(call->audiostream->ms.sessions.rtp_session, stream->rtcp_mux);
 			if (!call->params->in_conference && call->params->record_file){
 				audio_stream_mixed_record_open(call->audiostream,call->params->record_file);
 				call->current_params->record_file=ms_strdup(call->params->record_file);
@@ -3149,6 +3154,7 @@ static void linphone_call_start_video_stream(LinphoneCall *call, LinphoneCallSta
 													  ms_qos_analyzer_algorithm_from_string(linphone_core_get_adaptive_rate_algorithm(lc)));
 			video_stream_enable_adaptive_jittcomp(call->videostream, linphone_core_video_adaptive_jittcomp_enabled(lc));
 			rtp_session_set_jitter_compensation(call->videostream->ms.sessions.rtp_session, linphone_core_get_video_jittcomp(lc));
+			rtp_session_enable_rtcp_mux(call->videostream->ms.sessions.rtp_session, vstream->rtcp_mux);
 			if (lc->video_conf.preview_vsize.width!=0)
 				video_stream_set_preview_size(call->videostream,lc->video_conf.preview_vsize);
 			video_stream_set_fps(call->videostream,linphone_core_get_preferred_framerate(lc));
@@ -3275,8 +3281,10 @@ static void linphone_call_start_text_stream(LinphoneCall *call) {
 					ms_media_stream_sessions_set_srtp_send_key_b64(&call->textstream->ms.sessions, tstream->crypto[0].algo, local_st_desc->crypto[crypto_idx].master_key);
 				}
 			}
+			
 			configure_rtp_session_for_rtcp_fb(call, tstream);
 			configure_rtp_session_for_rtcp_xr(lc, call, SalText);
+			rtp_session_enable_rtcp_mux(call->textstream->ms.sessions.rtp_session, tstream->rtcp_mux);
 
 			if (is_multicast) rtp_session_set_multicast_ttl(call->textstream->ms.sessions.rtp_session,tstream->ttl);
 
@@ -4148,10 +4156,24 @@ static void change_ice_media_destinations(LinphoneCall *call) {
     }
 }
 
+static void linphone_call_on_ice_gathering_finished(LinphoneCall *call){
+	int ping_time;
+	const SalMediaDescription *rmd = sal_call_get_remote_media_description(call->op);
+	if (rmd){
+		linphone_call_clear_unused_ice_candidates(call, rmd);
+	}
+	ice_session_compute_candidates_foundations(call->ice_session);
+	ice_session_eliminate_redundant_candidates(call->ice_session);
+	ice_session_choose_default_candidates(call->ice_session);
+	ping_time = ice_session_average_gathering_round_trip_time(call->ice_session);
+	if (ping_time >=0) {
+		call->ping_time=ping_time;
+	}
+}
+
 static void handle_ice_events(LinphoneCall *call, OrtpEvent *ev){
 	OrtpEventType evt=ortp_event_get_type(ev);
 	OrtpEventData *evd=ortp_event_get_data(ev);
-	int ping_time;
 
 	if (evt == ORTP_EVENT_ICE_SESSION_PROCESSING_FINISHED) {
 		LinphoneCallParams *params = linphone_call_params_copy(call->current_params);
@@ -4196,13 +4218,7 @@ static void handle_ice_events(LinphoneCall *call, OrtpEvent *ev){
 	} else if (evt == ORTP_EVENT_ICE_GATHERING_FINISHED) {
 
 		if (evd->info.ice_processing_successful==TRUE) {
-			ice_session_compute_candidates_foundations(call->ice_session);
-			ice_session_eliminate_redundant_candidates(call->ice_session);
-			ice_session_choose_default_candidates(call->ice_session);
-			ping_time = ice_session_average_gathering_round_trip_time(call->ice_session);
-			if (ping_time >=0) {
-				call->ping_time=ping_time;
-			}
+			linphone_call_on_ice_gathering_finished(call);
 		} else {
 			ms_warning("No STUN answer from [%s], disabling ICE",linphone_core_get_stun_server(call->core));
 			linphone_call_delete_ice_session(call);
@@ -4250,6 +4266,7 @@ void linphone_call_stats_fill(LinphoneCallStats *stats, MediaStream *ms, OrtpEve
 		if(stats->received_rtcp != NULL)
 			freemsg(stats->received_rtcp);
 		stats->received_rtcp = evd->packet;
+		stats->rtcp_received_via_mux = evd->info.socket_type == OrtpRTPSocket;
 		evd->packet = NULL;
 		stats->updated = LINPHONE_CALL_STATS_RECEIVED_RTCP_UPDATE;
 		update_local_stats(stats,ms);
