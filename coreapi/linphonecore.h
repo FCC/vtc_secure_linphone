@@ -2775,7 +2775,7 @@ LINPHONE_PUBLIC int linphone_core_get_payload_type_bitrate(LinphoneCore *lc, con
  * @ingroup media_parameters
  */
 LINPHONE_PUBLIC	int linphone_core_enable_payload_type(LinphoneCore *lc, LinphonePayloadType *pt, bool_t enable);
-
+LINPHONE_PUBLIC int linphone_core_create_duplicate_payload_type_with_params(LinphoneCore *lc, LinphonePayloadType *pt, LinphonePayloadType *ptWithParams);
 /**
  * Wildcard value used by #linphone_core_find_payload_type to ignore rate in search algorithm
  * @ingroup media_parameters
