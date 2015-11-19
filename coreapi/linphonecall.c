@@ -36,6 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "mediastreamer2/msjpegwriter.h"
 #include "mediastreamer2/mseventqueue.h"
 #include "mediastreamer2/mssndcard.h"
+#include "mediastreamer2/msrtt4103.h"
 
 static const char *EC_STATE_STORE = ".linphone.ecstate";
 #define EC_STATE_MAX_LEN 1048576 // 1Mo
@@ -2218,6 +2219,10 @@ int linphone_call_prepare_ice(LinphoneCall *call, bool_t incoming_offer){
 				video_stream_prepare_video(call->videostream);
 			}
 #endif
+			if (call->params->realtimetext_enabled) {
+				text_stream_prepare_text(call->textstream);
+			}
+			
 			if (linphone_core_gather_ice_candidates(call->core,call)<0) {
 				/* Ice candidates gathering failed, proceed with the call anyway. */
 				linphone_call_delete_ice_session(call);
@@ -3257,6 +3262,15 @@ static void linphone_call_start_video_stream(LinphoneCall *call, LinphoneCallSta
 #endif
 }
 
+static void real_time_text_character_received(void *userdata, struct _MSFilter *f, unsigned int id, void *arg) {
+	if (id == MS_RTT_4103_RECEIVED_CHAR) {
+		LinphoneCall *call = (LinphoneCall *)userdata;
+		RealtimeTextReceivedCharacter *data = (RealtimeTextReceivedCharacter *)arg;
+		LinphoneChatRoom * chat_room = linphone_call_get_chat_room(call);
+		linphone_core_real_time_text_received(call->core, chat_room, data->character, call);
+	}
+}
+
 static void linphone_call_start_text_stream(LinphoneCall *call) {
 	LinphoneCore *lc = call->core;
 	int used_pt = -1;
@@ -3289,6 +3303,7 @@ static void linphone_call_start_text_stream(LinphoneCall *call) {
 			if (is_multicast) rtp_session_set_multicast_ttl(call->textstream->ms.sessions.rtp_session,tstream->ttl);
 
 			text_stream_start(call->textstream, call->text_profile, rtp_addr, tstream->rtp_port, rtcp_addr, (linphone_core_rtcp_enabled(lc) && !is_multicast)  ? (tstream->rtcp_port ? tstream->rtcp_port : tstream->rtp_port + 1) : 0, used_pt);
+			ms_filter_add_notify_callback(call->textstream->rttsink, real_time_text_character_received, call, TRUE);
 
 			ms_media_stream_sessions_set_encryption_mandatory(&call->textstream->ms.sessions,linphone_core_is_media_encryption_mandatory(call->core));
 		} else ms_warning("No text stream accepted.");
@@ -3447,6 +3462,9 @@ void linphone_call_stop_media_streams_for_ice_gathering(LinphoneCall *call){
 		video_stream_unprepare_video(call->videostream);
 	}
 #endif
+	if (call->textstream && call->textstream->ms.state == MSStreamPreparing) {
+		text_stream_unprepare_text(call->textstream);
+	}
 }
 
 static bool_t update_stream_crypto_params(LinphoneCall *call, const SalStreamDescription *local_st_desc, SalStreamDescription *old_stream, SalStreamDescription *new_stream, MediaStream *ms){
@@ -4059,18 +4077,23 @@ void linphone_call_stop_recording(LinphoneCall *call){
  * @}
 **/
 
-static void report_bandwidth(LinphoneCall *call, MediaStream *as, MediaStream *vs){
+static void report_bandwidth(LinphoneCall *call, MediaStream *as, MediaStream *vs, MediaStream *ts){
 	bool_t as_active =  as ? (media_stream_get_state(as) == MSStreamStarted) : FALSE;
 	bool_t vs_active =  vs ? (media_stream_get_state(vs) == MSStreamStarted) : FALSE;
+	bool_t ts_active =  ts ? (media_stream_get_state(ts) == MSStreamStarted) : FALSE;
 
 	call->stats[LINPHONE_CALL_STATS_AUDIO].download_bandwidth=(as_active) ? (float)(media_stream_get_down_bw(as)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_AUDIO].upload_bandwidth=(as_active) ? (float)(media_stream_get_up_bw(as)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_VIDEO].download_bandwidth=(vs_active) ? (float)(media_stream_get_down_bw(vs)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_VIDEO].upload_bandwidth=(vs_active) ? (float)(media_stream_get_up_bw(vs)*1e-3) : 0.f;
+	call->stats[LINPHONE_CALL_STATS_TEXT].download_bandwidth=(ts_active) ? (float)(media_stream_get_down_bw(ts)*1e-3) : 0.f;
+	call->stats[LINPHONE_CALL_STATS_TEXT].upload_bandwidth=(ts_active) ? (float)(media_stream_get_up_bw(ts)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_AUDIO].rtcp_download_bandwidth=(as_active) ? (float)(media_stream_get_rtcp_down_bw(as)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_AUDIO].rtcp_upload_bandwidth=(as_active) ? (float)(media_stream_get_rtcp_up_bw(as)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_VIDEO].rtcp_download_bandwidth=(vs_active) ? (float)(media_stream_get_rtcp_down_bw(vs)*1e-3) : 0.f;
 	call->stats[LINPHONE_CALL_STATS_VIDEO].rtcp_upload_bandwidth=(vs_active) ? (float)(media_stream_get_rtcp_up_bw(vs)*1e-3) : 0.f;
+	call->stats[LINPHONE_CALL_STATS_TEXT].rtcp_download_bandwidth=(ts_active) ? (float)(media_stream_get_rtcp_down_bw(ts)*1e-3) : 0.f;
+	call->stats[LINPHONE_CALL_STATS_TEXT].rtcp_upload_bandwidth=(ts_active) ? (float)(media_stream_get_rtcp_up_bw(ts)*1e-3) : 0.f;
 
 	call->stats[LINPHONE_CALL_STATS_AUDIO].updated|=LINPHONE_CALL_STATS_PERIODICAL_UPDATE;
 	linphone_core_notify_call_stats_updated(call->core, call, &call->stats[LINPHONE_CALL_STATS_AUDIO]);
@@ -4082,19 +4105,28 @@ static void report_bandwidth(LinphoneCall *call, MediaStream *as, MediaStream *v
 	call->stats[LINPHONE_CALL_STATS_VIDEO].updated=0;
 	if (vs) update_local_stats(&call->stats[LINPHONE_CALL_STATS_VIDEO], vs);
 
+	call->stats[LINPHONE_CALL_STATS_TEXT].updated|=LINPHONE_CALL_STATS_PERIODICAL_UPDATE;
+	linphone_core_notify_call_stats_updated(call->core, call, &call->stats[LINPHONE_CALL_STATS_TEXT]);
+	call->stats[LINPHONE_CALL_STATS_TEXT].updated=0;
+	if (ts) update_local_stats(&call->stats[LINPHONE_CALL_STATS_TEXT], ts);
+
 
 	ms_message(	"Bandwidth usage for call [%p]:\n"
-				"\tRTP  audio=[d=%5.1f,u=%5.1f], video=[d=%5.1f,u=%5.1f] kbits/sec\n"
-				"\tRTCP audio=[d=%5.1f,u=%5.1f], video=[d=%5.1f,u=%5.1f] kbits/sec",
+				"\tRTP  audio=[d=%5.1f,u=%5.1f], video=[d=%5.1f,u=%5.1f], text=[d=%5.1f,u=%5.1f] kbits/sec\n"
+				"\tRTCP audio=[d=%5.1f,u=%5.1f], video=[d=%5.1f,u=%5.1f], text=[d=%5.1f,u=%5.1f] kbits/sec",
 				call,
 				call->stats[LINPHONE_CALL_STATS_AUDIO].download_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_AUDIO].upload_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_VIDEO].download_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_VIDEO].upload_bandwidth,
+				call->stats[LINPHONE_CALL_STATS_TEXT].download_bandwidth,
+				call->stats[LINPHONE_CALL_STATS_TEXT].upload_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_AUDIO].rtcp_download_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_AUDIO].rtcp_upload_bandwidth,
 				call->stats[LINPHONE_CALL_STATS_VIDEO].rtcp_download_bandwidth,
-				call->stats[LINPHONE_CALL_STATS_VIDEO].rtcp_upload_bandwidth
+				call->stats[LINPHONE_CALL_STATS_VIDEO].rtcp_upload_bandwidth,
+				call->stats[LINPHONE_CALL_STATS_TEXT].rtcp_download_bandwidth,
+				call->stats[LINPHONE_CALL_STATS_TEXT].rtcp_upload_bandwidth
 	);
 
 }
@@ -4363,9 +4395,6 @@ void linphone_call_handle_stream_events(LinphoneCall *call, int stream_index){
 			if (ms) handle_ice_events(call, ev);
 		} else if (evt==ORTP_EVENT_TELEPHONE_EVENT){
 			linphone_core_dtmf_received(call,evd->info.telephone_event);
-		} else if (evt == ORTP_EVENT_RTT_CHARACTER_RECEIVED) {
-			LinphoneChatRoom * chat_room = linphone_call_get_chat_room(call);
-			linphone_core_real_time_text_received(call->core, chat_room, evd->info.received_rtt_character, call);
 		}
 		ortp_event_destroy(ev);
 	}
@@ -4382,17 +4411,21 @@ void linphone_call_background_tasks(LinphoneCall *call, bool_t one_second_elapse
 	case LinphoneCallPausedByRemote:
 	case LinphoneCallPaused:
 		if (one_second_elapsed){
-			float audio_load=0, video_load=0;
-			if (call->audiostream!=NULL){
+			float audio_load=0, video_load=0, text_load=0;
+			if (call->audiostream != NULL) {
 				if (call->audiostream->ms.sessions.ticker)
-					audio_load=ms_ticker_get_average_load(call->audiostream->ms.sessions.ticker);
+					audio_load = ms_ticker_get_average_load(call->audiostream->ms.sessions.ticker);
 			}
-			if (call->videostream!=NULL){
+			if (call->videostream != NULL) {
 				if (call->videostream->ms.sessions.ticker)
-					video_load=ms_ticker_get_average_load(call->videostream->ms.sessions.ticker);
+					video_load = ms_ticker_get_average_load(call->videostream->ms.sessions.ticker);
 			}
-			report_bandwidth(call,(MediaStream*)call->audiostream,(MediaStream*)call->videostream);
-			ms_message("Thread processing load: audio=%f\tvideo=%f",audio_load,video_load);
+			if (call->textstream != NULL) {
+				if (call->textstream->ms.sessions.ticker)
+					text_load = ms_ticker_get_average_load(call->textstream->ms.sessions.ticker);
+			}
+			report_bandwidth(call, (MediaStream*)call->audiostream, (MediaStream*)call->videostream,  (MediaStream*)call->textstream);
+			ms_message("Thread processing load: audio=%f\tvideo=%f\ttext=%f", audio_load, video_load, text_load);
 		}
 		break;
 	default:
