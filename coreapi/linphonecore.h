@@ -139,7 +139,14 @@ enum _LinphoneStreamType {
  * @ingroup initializing
 **/
 typedef enum _LinphoneStreamType LinphoneStreamType;
-
+/**
+ * Function returning a humain readable value for LinphoneStreamType.
+ * @param LinphoneStreamType
+ * @returns
+ * @ingroup initializing
+ **/
+	
+LINPHONE_PUBLIC const char *linphone_stream_type_to_string(const LinphoneStreamType);
 /**
  * Object that represents a SIP address.
  *
@@ -2373,8 +2380,9 @@ LINPHONE_PUBLIC void linphone_core_remove_listener(LinphoneCore *lc, const Linph
 /*sets the user-agent string in sip messages, ideally called just after linphone_core_new() or linphone_core_init() */
 LINPHONE_PUBLIC	void linphone_core_set_user_agent(LinphoneCore *lc, const char *ua_name, const char *version);
 
-/** @deprecated Use linphone_proxy_config_normalize_sip_uri instead. */
-LINPHONE_PUBLIC	LINPHONE_DEPRECATED LinphoneAddress * linphone_core_interpret_url(LinphoneCore *lc, const char *url);
+/** See linphone_proxy_config_normalize_sip_uri for documentation. Default proxy config is used to parse
+the address. */
+LINPHONE_PUBLIC	LinphoneAddress * linphone_core_interpret_url(LinphoneCore *lc, const char *url);
 
 LINPHONE_PUBLIC	LinphoneCall * linphone_core_invite(LinphoneCore *lc, const char *url);
 
@@ -3352,11 +3360,11 @@ LINPHONE_PUBLIC bool_t linphone_core_video_supported(LinphoneCore *lc);
 LINPHONE_PUBLIC	LINPHONE_DEPRECATED void linphone_core_enable_video(LinphoneCore *lc, bool_t vcap_enabled, bool_t display_enabled);
 
 /**
- * Returns TRUE if video is enabled, FALSE otherwise.
+ * Returns TRUE if either capture or display is enabled, FALSE otherwise.
+ * same as  ( #linphone_core_video_capture_enabled | #linphone_core_video_display_enabled )
  * @ingroup media_parameters
- * @deprecated Use #linphone_core_video_capture_enabled and #linphone_core_video_display_enabled instead.
 **/
-LINPHONE_PUBLIC LINPHONE_DEPRECATED bool_t linphone_core_video_enabled(LinphoneCore *lc);
+LINPHONE_PUBLIC  bool_t linphone_core_video_enabled(LinphoneCore *lc);
 
 /**
  * Enable or disable video capture.

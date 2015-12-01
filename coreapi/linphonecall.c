@@ -2929,6 +2929,16 @@ static RtpSession * create_audio_rtp_io_session(LinphoneCall *call) {
 	return rtp_session;
 }
 
+static void linphone_call_set_on_hold_file(LinphoneCall *call, const char *file){
+	if (call->onhold_file){
+		ms_free(call->onhold_file);
+		call->onhold_file = NULL;
+	}
+	if (file){
+		call->onhold_file = ms_strdup(file);
+	}
+}
+
 static void linphone_call_start_audio_stream(LinphoneCall *call, LinphoneCallState next_state, bool_t use_arc){
 	LinphoneCore *lc=call->core;
 	int used_pt=-1;
@@ -2940,6 +2950,7 @@ static void linphone_call_start_audio_stream(LinphoneCall *call, LinphoneCallSta
 	bool_t mute;
 	const char *playfile;
 	const char *recfile;
+	const char *file_to_play = NULL;
 	const SalStreamDescription *local_st_desc;
 	int crypto_idx;
 	MSMediaStreamIO io = MS_MEDIA_STREAM_IO_INITIALIZER;
@@ -3052,21 +3063,23 @@ static void linphone_call_start_audio_stream(LinphoneCall *call, LinphoneCallSta
 					io.input.soundcard = captcard;
 				}else{
 					io.input.type = MSResourceFile;
-					io.input.file = playfile;
+					file_to_play = playfile;
+					io.input.file = NULL; /*we prefer to use the remote_play api, that allows to play multimedia files */
 				}
 
 			}
 			if (ok == TRUE) {
-				audio_stream_start_from_io(call->audiostream,
+				int err = audio_stream_start_from_io(call->audiostream,
 					call->audio_profile,
 					rtp_addr,
 					stream->rtp_port,
 					stream->rtcp_addr[0]!='\0' ? stream->rtcp_addr : call->resultdesc->addr,
 					(linphone_core_rtcp_enabled(lc) && !is_multicast) ? (stream->rtcp_port ? stream->rtcp_port : stream->rtp_port+1) : 0,
 					used_pt,
-					&io
-				);
-				post_configure_audio_streams(call, (call->all_muted || call->audio_muted) && !call->playing_ringbacktone);
+					&io);
+				if (err == 0){
+					post_configure_audio_streams(call, (call->all_muted || call->audio_muted) && !call->playing_ringbacktone);
+				}
 			}
 
 			ms_media_stream_sessions_set_encryption_mandatory(&call->audiostream->ms.sessions,linphone_core_is_media_encryption_mandatory(call->core));
@@ -3088,6 +3101,7 @@ static void linphone_call_start_audio_stream(LinphoneCall *call, LinphoneCallSta
 			call->current_params->low_bandwidth=call->params->low_bandwidth;
 		}else ms_warning("No audio stream accepted ?");
 	}
+	linphone_call_set_on_hold_file(call, file_to_play);
 }
 
 #ifdef VIDEO_ENABLED
@@ -3418,6 +3432,13 @@ void linphone_call_start_media_streams(LinphoneCall *call, LinphoneCallState nex
 	if (call->videostream!=NULL) {
 		if (call->audiostream) audio_stream_link_video(call->audiostream,call->videostream);
 		linphone_call_start_video_stream(call, next_state);
+	}
+	/*the onhold file is to be played once both audio and video are ready.*/
+	if (call->onhold_file && !call->params->in_conference && call->audiostream){
+		MSFilter *player = audio_stream_open_remote_play(call->audiostream, call->onhold_file);
+		if (player){
+			ms_filter_call_method_noarg(player, MS_PLAYER_START);
+		}
 	}
 
 	call->up_bw=linphone_core_get_upload_bandwidth(lc);
