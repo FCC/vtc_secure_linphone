@@ -1684,6 +1684,7 @@ static void linphone_core_init(LinphoneCore * lc, const LinphoneCoreVTable *vtab
 	ms_init();
 
 	linphone_core_register_default_codecs(lc);
+	linphone_core_register_offer_answer_providers(lc);
 	/* Get the mediastreamer2 event queue */
 	/* This allows to run event's callback in linphone_core_iterate() */
 	lc->msevq=ms_factory_create_event_queue(ms_factory_get_fallback());
@@ -7023,6 +7024,7 @@ void linphone_core_init_default_params(LinphoneCore*lc, LinphoneCallParams *para
 	params->realtimetext_enabled = linphone_core_realtime_text_enabled(lc);
 	params->privacy=LinphonePrivacyDefault;
 	params->avpf_enabled=linphone_core_get_avpf_mode(lc);
+    params->implicit_rtcp_fb = lp_config_get_int(lc->config,"rtp","rtcp_fb_implicit_rtcp_fb",TRUE);
 	params->audio_dir=LinphoneMediaDirectionSendRecv;
 	params->video_dir=LinphoneMediaDirectionSendRecv;
 	params->real_early_media=lp_config_get_int(lc->config,"misc","real_early_media",FALSE);

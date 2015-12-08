@@ -138,6 +138,7 @@ struct _LinphoneCallParams{
 	bool_t has_audio;
 	bool_t has_video;
 	bool_t avpf_enabled; /* RTCP feedback messages are enabled */
+    bool_t implicit_rtcp_fb;
 	bool_t real_early_media; /*send real media even during early media (for outgoing calls)*/
 	bool_t in_conference; /*in conference mode */
 
@@ -1082,6 +1083,7 @@ void linphone_event_set_publish_state(LinphoneEvent *lev, LinphonePublishState s
 LinphoneSubscriptionState linphone_subscription_state_from_sal(SalSubscribeStatus ss);
 LinphoneContent *linphone_content_from_sal_body(const SalBody *ref);
 void linphone_core_invalidate_friend_subscriptions(LinphoneCore *lc);
+void linphone_core_register_offer_answer_providers(LinphoneCore *lc);
 
 
 struct _LinphoneContent {
