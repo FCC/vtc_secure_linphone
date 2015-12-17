@@ -3749,6 +3749,14 @@ extern "C" void Java_org_linphone_core_LinphoneCallParamsImpl_enableLowBandwidth
 	linphone_call_params_enable_low_bandwidth((LinphoneCallParams *)cp, enable);
 }
 
+extern "C" float Java_org_linphone_core_LinphoneCallParamsImpl_getSentFPSRate(JNIEnv *env, jobject thiz, jlong cp) {
+	return (jlong)linphone_call_params_get_sent_framerate((LinphoneCallParams *)cp);
+}
+
+extern "C" float Java_org_linphone_core_LinphoneCallParamsImpl_getReceivedFPSRate(JNIEnv *env, jobject thiz, jlong cp) {
+	return (jlong)linphone_call_params_get_received_framerate((LinphoneCallParams *)cp);
+}
+
 extern "C" jlong Java_org_linphone_core_LinphoneCallParamsImpl_getUsedAudioCodec(JNIEnv *env, jobject thiz, jlong cp) {
 	return (jlong)linphone_call_params_get_used_audio_codec((LinphoneCallParams *)cp);
 }
