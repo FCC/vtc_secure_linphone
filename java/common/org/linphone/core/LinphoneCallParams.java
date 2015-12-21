@@ -237,4 +237,16 @@ public interface LinphoneCallParams {
 	 * @param The video stream direction associated with this call params.
 	**/
 	void setVideoDirection(MediaDirection dir);
+
+	/**
+	 * Get the video stream sent FPS.
+	 * @return The video stream sent FPS associated with the call params.
+	 **/
+	float getSentFPSRate();
+
+	/**
+	 * Get the video stream received FPS.
+	 * @return The video stream received FPS associated with the call params.
+	 **/
+	float getReceivedFPSRate();
 }
