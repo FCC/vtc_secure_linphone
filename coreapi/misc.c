@@ -85,6 +85,24 @@ int linphone_core_enable_payload_type(LinphoneCore *lc, LinphonePayloadType *pt,
 	return -1;
 }
 
+int linphone_core_create_duplicate_payload_type_with_params(LinphoneCore *lc, LinphonePayloadType *pt, LinphonePayloadType *ptWithParams){
+        if (ms_list_find(lc->codecs_conf.audio_codecs,pt) || ms_list_find(lc->codecs_conf.video_codecs,pt) || ms_list_find(lc->codecs_conf.text_codecs,pt)){
+		if(strcmp(pt->mime_type, ptWithParams->mime_type) == 0 && pt->type == ptWithParams->type){
+			lc->codecs_conf.video_codecs = ms_list_append(lc->codecs_conf.video_codecs, ptWithParams);
+               		 payload_type_set_enable(ptWithParams,TRUE);
+               		 _linphone_core_codec_config_write(lc);
+               		 linphone_core_update_allocated_audio_bandwidth(lc);
+               		 return 0;
+		}
+		else{
+			ms_error("Codec is not equivalent");
+			return -1;
+		}
+        }
+        ms_error("Enabling codec not in audio or video list of PayloadType !");
+        return -1;
+}
+
 int linphone_core_get_payload_type_number(LinphoneCore *lc, const PayloadType *pt){
 	return payload_type_get_number(pt);
 }

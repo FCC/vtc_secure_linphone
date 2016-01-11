@@ -39,6 +39,9 @@ public class LinphoneCallParamsImpl implements LinphoneCallParams {
 	private native void destroy(long nativePtr);
 	private native void enableLowBandwidth(long nativePtr, boolean enable);
 	private native boolean isLowBandwidthEnabled(long nativePtr);
+	private native float getReceivedFPSRate(long nativePtr);
+	private native float getSentFPSRate(long nativePtr);
+	
 	
 	public boolean getVideoEnabled() {
 		return getVideoEnabled(nativePtr);
@@ -245,4 +248,16 @@ public class LinphoneCallParamsImpl implements LinphoneCallParams {
 	public void setVideoDirection(MediaDirection direction) {
 		setVideoDirection(nativePtr, direction.mValue);
 	}
+
+	@Override
+	public float getSentFPSRate() {
+		return getSentFPSRate(nativePtr);
+	}
+
+	@Override
+	public float getReceivedFPSRate() {
+		return getReceivedFPSRate(nativePtr);
+	}
+
+
 }
