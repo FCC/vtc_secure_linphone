@@ -47,6 +47,7 @@ set(LINPHONE_HEADER_FILES
 	lpc2xml.h
 	lpconfig.h
 	ringtoneplayer.h
+	carddav.h
 	sipsetup.h
 	xml2lpc.h
 	xmlrpc.h
