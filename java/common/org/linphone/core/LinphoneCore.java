@@ -1914,6 +1914,12 @@ public interface LinphoneCore {
 	public void setCallLogsDatabasePath(String path);
 
 	/**
+	 * Sets the path to the database where the friends will be stored (if enabled)
+	 * @param path the database where the friends will be stored.
+	 */
+	public void setFriendsDatabasePath(String path);
+
+	/**
 	 * Gets the chat rooms
 	 * @return an array of LinphoneChatRoom
 	 */
@@ -2248,4 +2254,14 @@ public interface LinphoneCore {
 	 */
 	public int getNortpTimeout();
 
+	/**
+	 * Imports LinphoneFriends from a vCard 4 file
+	 * @return the number of friend imported
+	**/
+	public int importFriendsFromVCardFile(String file);
+	
+	/**
+	 * Exports LinphoneFriends to a vCard 4 file
+	**/
+	public void exportFriendsToVCardFile(String file);
 }

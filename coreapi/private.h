@@ -35,6 +35,7 @@
 #include "sipsetup.h"
 #include "quality_reporting.h"
 #include "ringtoneplayer.h"
+#include "vcard.h"
 
 #include <belle-sip/object.h>
 #include <belle-sip/dict.h>
@@ -415,6 +416,12 @@ LinphoneFriend *linphone_friend_list_find_friend_by_out_subscribe(const Linphone
 MSList *linphone_find_friend_by_address(MSList *fl, const LinphoneAddress *addr, LinphoneFriend **lf);
 bool_t linphone_core_should_subscribe_friends_only_when_registered(const LinphoneCore *lc);
 void linphone_core_update_friends_subscriptions(LinphoneCore *lc, LinphoneProxyConfig *cfg, bool_t only_when_registered);
+void linphone_core_friends_storage_init(LinphoneCore *lc);
+void linphone_core_friends_storage_close(LinphoneCore *lc);
+void linphone_core_store_friend_in_db(LinphoneCore *lc, LinphoneFriend *lf);
+void linphone_core_remove_friend_from_db(LinphoneCore *lc, LinphoneFriend *lf);
+MSList* linphone_core_fetch_friends_from_db(LinphoneCore *lc);
+LinphoneFriendListStatus linphone_friend_list_import_friend(LinphoneFriendList *list, LinphoneFriend *lf);
 
 int parse_hostname_to_addr(const char *server, struct sockaddr_storage *ss, socklen_t *socklen, int default_port);
 
@@ -675,6 +682,8 @@ struct _LinphoneFriend{
 	bool_t commit;
 	bool_t initial_subscribes_sent; /*used to know if initial subscribe message was sent or not*/
 	bool_t presence_received;
+	LinphoneVCard *vcard;
+	unsigned int storage_id;
 };
 
 BELLE_SIP_DECLARE_VPTR(LinphoneFriend);
@@ -939,6 +948,10 @@ struct _LinphoneCore
 	char *logs_db_file;
 #ifdef CALL_LOGS_STORAGE_ENABLED
 	sqlite3 *logs_db;
+#endif
+	char *friends_db_file;
+#ifdef FRIENDS_SQL_STORAGE_ENABLED
+	sqlite3 *friends_db;
 #endif
 #ifdef BUILD_UPNP
 	UpnpContext *upnp;
@@ -1209,9 +1222,59 @@ struct _LinphoneAccountCreator {
 
 BELLE_SIP_DECLARE_VPTR(LinphoneAccountCreator);
 
+/*****************************************************************************
+ * CardDAV interface                                                         *
+ ****************************************************************************/
+
+struct _LinphoneCardDavContext {
+	LinphoneCore *lc;
+	int ctag;
+	const char *server_url;
+	const char *username;
+	const char *password;
+	const char *ha1;
+	void *user_data;
+	LinphoneCardDavContactCreatedCb contact_created_cb;
+	LinphoneCardDavContactUpdatedCb contact_updated_cb;
+	LinphoneCardDavContactRemovedCb contact_removed_cb;
+	LinphoneCardDavSynchronizationDoneCb sync_done_cb;
+};
+
+struct _LinphoneCardDavQuery {
+	LinphoneCardDavContext *context;
+	const char *url;
+	const char *method;
+	const char *body;
+	const char *depth;
+	const char *ifmatch;
+	belle_http_request_listener_t *http_request_listener;
+	void *user_data;
+	LinphoneCardDavQueryType type;
+};
+
+struct _LinphoneCardDavResponse {
+	LinphoneCardDavContext *context;
+	const char *etag;
+	const char *url;
+	const char *vcard;
+};
+
+/**
+ * Sets the CardDAV server current cTag
+ * @param lc LinphoneCore object
+ * @param ctag the current cTag for the CardDAV server
+ */
+void linphone_core_set_carddav_current_ctag(LinphoneCore *lc, int ctag);
+
+/**
+ * Gets the CardDAV server last cTag
+ * @param lc LinphoneCore object
+ * @return the last cTag for the CardDAV server if set, otherwise -1
+ */
+int linphone_core_get_carddav_last_ctag(LinphoneCore *lc);
 
 /*****************************************************************************
- * REMOTE PROVISIONING FUNCTIONS                                                     *
+ * REMOTE PROVISIONING FUNCTIONS                                             *
  ****************************************************************************/
 
 void linphone_configuring_terminated(LinphoneCore *lc, LinphoneConfiguringState state, const char *message);
@@ -1219,7 +1282,7 @@ int linphone_remote_provisioning_download_and_apply(LinphoneCore *lc, const char
 LINPHONE_PUBLIC int linphone_remote_provisioning_load_file( LinphoneCore* lc, const char* file_path);
 
 /*****************************************************************************
- * Player interface
+ * Player interface                                                          *
  ****************************************************************************/
 
 struct _LinphonePlayer{
@@ -1262,6 +1325,7 @@ char * linphone_get_xml_text_content(xmlparsing_context_t *xml_ctx, const char *
 const char * linphone_get_xml_attribute_text_content(xmlparsing_context_t *xml_ctx, const char *xpath_expression, const char *attribute_name);
 void linphone_free_xml_text_content(const char *text);
 xmlXPathObjectPtr linphone_get_xml_xpath_object_for_node_list(xmlparsing_context_t *xml_ctx, const char *xpath_expression);
+void linphone_xml_xpath_context_init_carddav_ns(xmlparsing_context_t *xml_ctx);
 
 /*****************************************************************************
  * OTHER UTILITY FUNCTIONS                                                     *

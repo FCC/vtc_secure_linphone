@@ -167,6 +167,7 @@ class LinphoneCoreImpl implements LinphoneCore {
 	private native String getPrimaryContactDisplayName(long nativePtr);
 	private native void setChatDatabasePath(long nativePtr, String path);
 	private native void setCallLogsDatabasePath(long nativePtr, String path);
+	private native void setFriendsDatabasePath(long nativePtr, String path);
 	private native long[] getChatRooms(long nativePtr);
 	private native int migrateToMultiTransport(long nativePtr);
 	private native void migrateCallLogs(long nativePtr);
@@ -1202,6 +1203,10 @@ class LinphoneCoreImpl implements LinphoneCore {
 	public synchronized void setCallLogsDatabasePath(String path) {
 		setCallLogsDatabasePath(nativePtr, path);
 	}
+	
+	public synchronized void setFriendsDatabasePath(String path) {
+		setFriendsDatabasePath(nativePtr, path);
+	}
 
 	public synchronized LinphoneChatRoom[] getChatRooms() {
 		long[] typesPtr = getChatRooms(nativePtr);
@@ -1604,5 +1609,17 @@ class LinphoneCoreImpl implements LinphoneCore {
 	@Override
 	public int getNortpTimeout(){
 		return getNortpTimeout(nativePtr);
+	}
+	
+	private native int importFriendsFromVCardFile(long nativePtr, String file);
+	@Override
+	public int importFriendsFromVCardFile(String file) {
+		return importFriendsFromVCardFile(nativePtr, file);
+	}
+	
+	private native void exportFriendsToVCardFile(long nativePtr, String file);
+	@Override
+	public void exportFriendsToVCardFile(String file) {
+		exportFriendsToVCardFile(nativePtr, file);
 	}
 }

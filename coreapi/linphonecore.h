@@ -417,6 +417,7 @@ LINPHONE_PUBLIC const char* linphone_privacy_to_string(LinphonePrivacy privacy);
 #include "event.h"
 #include "linphonefriend.h"
 #include "xmlrpc.h"
+#include "carddav.h"
 #else
 #include "linphone/buffer.h"
 #include "linphone/call_log.h"
@@ -425,6 +426,7 @@ LINPHONE_PUBLIC const char* linphone_privacy_to_string(LinphonePrivacy privacy);
 #include "linphone/event.h"
 #include "linphone/linphonefriend.h"
 #include "linphone/xmlrpc.h"
+#include "linphone/carddav.h"
 #endif
 
 LINPHONE_PUBLIC	LinphoneAddress * linphone_address_new(const char *addr);
@@ -3898,9 +3900,10 @@ LINPHONE_PUBLIC	float linphone_core_get_conference_local_input_volume(LinphoneCo
  */
 LINPHONE_PUBLIC	int linphone_core_terminate_conference(LinphoneCore *lc);
 /**
- * Get the number of remote participant in the running conference
+ * Get the number of participant in the running conference. The local
+ * participant is included in the count only if it is in the conference.
  * @param lc #LinphoneCore
- * @return The number of remote participant
+ * @return The number of participant
  */
 LINPHONE_PUBLIC	int linphone_core_get_conference_size(LinphoneCore *lc);
 /**
@@ -4348,7 +4351,6 @@ LINPHONE_PUBLIC const char* linphone_transport_to_string(LinphoneTransportType t
 **/
 LINPHONE_PUBLIC LinphoneTransportType linphone_transport_parse(const char* transport);
 
-
 /**
  * @ingroup media_parameters
  * Get default call parameters reflecting current linphone core configuration
@@ -4357,6 +4359,65 @@ LINPHONE_PUBLIC LinphoneTransportType linphone_transport_parse(const char* trans
  * @deprecated use linphone_core_create_call_params()
  */
 LINPHONE_PUBLIC LINPHONE_DEPRECATED LinphoneCallParams *linphone_core_create_default_call_parameters(LinphoneCore *lc);
+
+/*****************************************************************************
+ * CardDAV interface                                                         *
+ ****************************************************************************/
+
+/**
+ * Sets the CardDAV server URL
+ * @param lc LinphoneCore object
+ * @param carddav_server_url the URL to the CardDAV server
+ */
+LINPHONE_PUBLIC void linphone_core_set_carddav_server_url(LinphoneCore *lc, const char *carddav_server_url);
+
+/**
+ * Gets the CardDAV server URL if set
+ * @param lc LinphoneCore object
+ * @return the URL to the CardDAV server if set, otherwise NULL
+ */
+LINPHONE_PUBLIC const char *linphone_core_get_carddav_server_url(LinphoneCore *lc);
+/**
+ * Sets the CardDAV server username
+ * @param lc LinphoneCore object
+ * @param username the username for the CardDAV server
+ */
+LINPHONE_PUBLIC void linphone_core_set_carddav_username(LinphoneCore *lc, const char *username);
+
+/**
+ * Gets the CardDAV server username
+ * @param lc LinphoneCore object
+ * @return the username for the CardDAV server if set, otherwise NULL
+ */
+LINPHONE_PUBLIC const char *linphone_core_get_carddav_username(LinphoneCore *lc);
+
+/**
+ * Sets the CardDAV server password
+ * @param lc LinphoneCore object
+ * @param password the password for the CardDAV server
+ */
+LINPHONE_PUBLIC void linphone_core_set_carddav_password(LinphoneCore *lc, const char *password);
+
+/**
+ * Gets the CardDAV server password
+ * @param lc LinphoneCore object
+ * @return the password for the CardDAV server if set, otherwise NULL
+ */
+LINPHONE_PUBLIC const char *linphone_core_get_carddav_password(LinphoneCore *lc);
+
+/**
+ * Sets the CardDAV server hashed password
+ * @param lc LinphoneCore object
+ * @param ha1 the hashed password for the CardDAV server
+ */
+LINPHONE_PUBLIC void linphone_core_set_carddav_ha1(LinphoneCore *lc, const char *ha1);
+
+/**
+ * Gets the CardDAV server hashed password
+ * @param lc LinphoneCore object
+ * @return the hashed password for the CardDAV server if set, otherwise NULL
+ */
+LINPHONE_PUBLIC const char *linphone_core_get_carddav_ha1(LinphoneCore *lc);
 
 typedef struct _LinphoneRingtonePlayer LinphoneRingtonePlayer;
 

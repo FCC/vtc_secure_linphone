@@ -42,7 +42,8 @@ linphone_include_HEADERS=\
 	lpconfig.h \
 	sipsetup.h \
 	xml2lpc.h \
-	xmlrpc.h
+	xmlrpc.h \
+	carddav.h
 
 lib_LTLIBRARIES=liblinphone.la
 
@@ -90,6 +91,7 @@ liblinphone_la_SOURCES=\
 	xml.c \
 	xmlrpc.c \
 	vtables.c \
+	carddav.c \
 	ringtoneplayer.c ringtoneplayer.h\
 	$(GITVERSION_FILE)
 
@@ -117,6 +119,12 @@ else
 liblinphone_la_SOURCES+=linphone_tunnel_stubs.c linphone_tunnel.h
 endif
 
+if BUILD_VCARD
+liblinphone_la_SOURCES+=vcard.cc vcard.h
+liblinphone_la_CXXFLAGS=-std=c++11
+else
+liblinphone_la_SOURCES+=vcard_stubs.c vcard.h
+endif
 
 liblinphone_la_LDFLAGS= -version-info $(LIBLINPHONE_SO_VERSION) -no-undefined
 
@@ -144,19 +152,21 @@ liblinphone_la_LIBADD= \
 		$(LIBXML2_LIBS) \
 		$(LDAP_LIBS) \
 		$(SASL_LIBS) \
+		$(BELCARD_LIBS) \
 		$(ZLIB_LIBS)
 
 
 AM_CPPFLAGS=\
 	-I$(top_srcdir) -I$(top_srcdir)/include -I$(builddir) \
-		$(ORTP_CFLAGS) \
-		$(MEDIASTREAMER_CFLAGS)
+	$(ORTP_CFLAGS) \
+	$(MEDIASTREAMER_CFLAGS) \
+	$(LIBXML2_CFLAGS)
 
 COMMON_CFLAGS=\
 	$(STRICT_OPTIONS) \
 	-DIN_LINPHONE \
 	$(SIPSTACK_CFLAGS) \
-	-DENABLE_TRACE 	\
+	-DENABLE_TRACE \
 	-DLOG_DOMAIN=\"LinphoneCore\" \
 	$(IPV6_CFLAGS) \
 	-DORTP_INET6 \
@@ -166,6 +176,7 @@ COMMON_CFLAGS=\
 	$(LIBXML2_CFLAGS) \
 	$(LDAP_CFLAGS) \
 	$(SASL_CFLAGS) \
+	$(BELCARD_CFLAGS) \
 	$(ZLIB_CFLAGS)
 
 if BUILD_WIZARD
