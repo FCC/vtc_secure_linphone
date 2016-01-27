@@ -47,9 +47,11 @@ set(LINPHONE_HEADER_FILES
 	lpc2xml.h
 	lpconfig.h
 	ringtoneplayer.h
+	carddav.h
 	sipsetup.h
 	xml2lpc.h
 	xmlrpc.h
+	vcard.h
 )
 
 set(LINPHONE_SOURCE_FILES_C
@@ -173,6 +175,16 @@ endif()
 if(INTL_FOUND)
 	list(APPEND LIBS ${INTL_LIBRARIES})
 endif()
+if(BELCARD_FOUND)
+	list(APPEND LIBS ${BELCARD_LIBRARIES})
+	list(APPEND LINPHONE_SOURCE_FILES_CXX vcard.cc)
+	add_definitions(-DVCARD_ENABLED)
+else()
+	list(APPEND LINPHONE_SOURCE_FILES_C vcard_stubs.c)
+endif()
+
+apply_compile_flags(LINPHONE_SOURCE_FILES_C "CPP" "C")
+apply_compile_flags(LINPHONE_SOURCE_FILES_CXX "CPP" "CXX")
 
 if(ENABLE_STATIC)
 	add_library(linphone STATIC ${LINPHONE_HEADER_FILES} ${LINPHONE_SOURCE_FILES_C} ${LINPHONE_SOURCE_FILES_CXX} ${LINPHONE_SOURCE_FILES_OBJC})

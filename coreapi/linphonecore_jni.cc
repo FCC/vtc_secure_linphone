@@ -1355,16 +1355,21 @@ extern "C" void Java_org_linphone_core_LinphoneCoreImpl_stopRinging(JNIEnv* env,
 	linphone_core_stop_ringing((LinphoneCore*)lc);
 }
 
-extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setChatDatabasePath(JNIEnv* env, jobject  thiz, jlong lc, jstring jpath) {
+extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setChatDatabasePath(JNIEnv* env, jobject thiz, jlong lc, jstring jpath) {
 	const char* path = env->GetStringUTFChars(jpath, NULL);
 	linphone_core_set_chat_database_path((LinphoneCore*)lc, path);
 	env->ReleaseStringUTFChars(jpath, path);
 }
 
-extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setCallLogsDatabasePath( JNIEnv* env, jobject  thiz, jlong lc, jstring jpath) {
-		const char* path = env->GetStringUTFChars(jpath, NULL);
-		linphone_core_set_call_logs_database_path((LinphoneCore*)lc, path);
-		env->ReleaseStringUTFChars(jpath, path);
+extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setCallLogsDatabasePath( JNIEnv* env, jobject thiz, jlong lc, jstring jpath) {
+	const char* path = env->GetStringUTFChars(jpath, NULL);
+	linphone_core_set_call_logs_database_path((LinphoneCore*)lc, path);
+	env->ReleaseStringUTFChars(jpath, path);
+}
+extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setFriendsDatabasePath( JNIEnv* env, jobject thiz, jlong lc, jstring jpath) {
+	const char* path = env->GetStringUTFChars(jpath, NULL);
+	linphone_core_set_friends_database_path((LinphoneCore*)lc, path);
+	env->ReleaseStringUTFChars(jpath, path);
 }
 
 extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setPrimaryContact2(JNIEnv* env, jobject  thiz, jlong lc, jstring jcontact) {
@@ -1938,6 +1943,19 @@ extern "C" void Java_org_linphone_core_LinphoneCoreImpl_addFriend(JNIEnv*  env
 																			,jlong aFriend
 																			) {
 	linphone_core_add_friend((LinphoneCore*)lc,(LinphoneFriend*)aFriend);
+}
+
+extern "C" jint Java_org_linphone_core_LinphoneCoreImpl_importFriendsFromVCardFile(JNIEnv* env, jobject thiz, jlong lc, jstring jpath) {
+	const char* path = env->GetStringUTFChars(jpath, NULL);
+	int count = linphone_core_import_friends_from_vcard4_file((LinphoneCore*)lc, path);
+	env->ReleaseStringUTFChars(jpath, path);
+	return count;
+}
+
+extern "C" void Java_org_linphone_core_LinphoneCoreImpl_exportFriendsToVCardFile(JNIEnv* env, jobject thiz, jlong lc, jstring jpath) {
+	const char* path = env->GetStringUTFChars(jpath, NULL);
+	linphone_core_export_friends_as_vcard4_file((LinphoneCore*)lc, path);
+	env->ReleaseStringUTFChars(jpath, path);
 }
 
 extern "C" void Java_org_linphone_core_LinphoneCoreImpl_setFriendList(JNIEnv*  env
@@ -3078,13 +3096,22 @@ extern "C" void Java_org_linphone_core_LinphoneFriendImpl_setAddress(JNIEnv*  en
 	linphone_friend_set_address((LinphoneFriend*)ptr,(LinphoneAddress*)linphoneAddress);
 }
 
+extern "C" void Java_org_linphone_core_LinphoneFriendImpl_setName(JNIEnv*  env
+																		,jobject  thiz
+																		,jlong ptr
+																		,jstring jname) {
+	const char* name = env->GetStringUTFChars(jname, NULL);
+	linphone_friend_set_name((LinphoneFriend*)ptr, name);
+	env->ReleaseStringUTFChars(jname, name);
+}
+
 extern "C" void Java_org_linphone_core_LinphoneFriendListImpl_setRLSUri(JNIEnv*  env
 																		,jobject  thiz
 																		,jlong ptr
 																		,jstring jrlsUri) {
 	const char* uri = env->GetStringUTFChars(jrlsUri, NULL);
 	linphone_friend_list_set_rls_uri((LinphoneFriendList*)ptr,uri);
-	env->ReleaseStringUTFChars(jrlsUri, uri);	
+	env->ReleaseStringUTFChars(jrlsUri, uri);
 }
 
 extern "C" jlong Java_org_linphone_core_LinphoneFriendListImpl_findFriendByUri(JNIEnv*  env
@@ -3092,9 +3119,9 @@ extern "C" jlong Java_org_linphone_core_LinphoneFriendListImpl_findFriendByUri(J
 																		,jlong friendListptr
 																		,jstring juri) {
 	const char* uri = env->GetStringUTFChars(juri, NULL);
-        LinphoneFriend* lResult;
+	LinphoneFriend* lResult;
 	lResult = linphone_friend_list_find_friend_by_uri((LinphoneFriendList*)friendListptr,uri);
-        env->ReleaseStringUTFChars(juri, uri);
+	env->ReleaseStringUTFChars(juri, uri);
 	return (jlong)lResult;
 }
 
@@ -3121,6 +3148,14 @@ extern "C" jlong Java_org_linphone_core_LinphoneFriendImpl_getAddress(JNIEnv*  e
 																		,jlong ptr) {
 	return (jlong)linphone_friend_get_address((LinphoneFriend*)ptr);
 }
+
+extern "C" jstring Java_org_linphone_core_LinphoneFriendImpl_getName(JNIEnv*  env
+																		,jobject  thiz
+																		,jlong ptr) {
+	const char *name = linphone_friend_get_name((LinphoneFriend*)ptr);
+	return name ? env->NewStringUTF(name) : NULL;
+}
+
 extern "C" void Java_org_linphone_core_LinphoneFriendImpl_setIncSubscribePolicy(JNIEnv*  env
 																		,jobject  thiz
 																		,jlong ptr
