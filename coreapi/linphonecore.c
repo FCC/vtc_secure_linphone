@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <mediastreamer2/zrtp.h>
 #include <mediastreamer2/dtls_srtp.h>
 #include "mediastreamer2/mediastream.h"
+#include "mediastreamer2/msfactory.h"
 #include "mediastreamer2/mseventqueue.h"
 #include "mediastreamer2/msvolume.h"
 #include "mediastreamer2/msequalizer.h"
@@ -778,7 +779,7 @@ static void build_sound_devices_table(LinphoneCore *lc){
 	const char **old;
 	int ndev;
 	int i;
-	const MSList *elem=ms_snd_card_manager_get_list(ms_snd_card_manager_get());
+	const MSList *elem=ms_snd_card_manager_get_list(ms_factory_get_snd_card_manager(lc->factory));
 	ndev=ms_list_size(elem);
 	devices=ms_malloc((ndev+1)*sizeof(const char *));
 	for (i=0;elem!=NULL;elem=elem->next,i++){
@@ -823,13 +824,13 @@ static void sound_config_read(LinphoneCore *lc)
 			char s=*i;
 			*i='\0';
 			card=ms_alsa_card_new_custom(d+l,d+l);
-			ms_snd_card_manager_add_card(ms_snd_card_manager_get(),card);
+			ms_snd_card_manager_add_card(ms_factory_get_snd_card_manager(lc->factory),card);
 			*i=s;
 			l=i-d+1;
 		}
 		if(d[l]!='\0') {
 			card=ms_alsa_card_new_custom(d+l,d+l);
-			ms_snd_card_manager_add_card(ms_snd_card_manager_get(),card);
+			ms_snd_card_manager_add_card(ms_factory_get_snd_card_manager(lc->factory),card);
 		}
 		free(d);
 	}
@@ -1157,7 +1158,8 @@ static bool_t linphone_core_codec_supported(LinphoneCore *lc, SalStreamType type
 	} else if (type == SalText) {
 		return TRUE;
 	}
-	return ms_filter_codec_supported(mime);
+	//ms_filter_codec_supported(mime)
+	return ms_factory_codec_supported (lc->factory, mime );
 }
 
 
@@ -1293,7 +1295,7 @@ static void build_video_devices_table(LinphoneCore *lc){
 	if (lc->video_conf.cams)
 		ms_free(lc->video_conf.cams);
 	/* retrieve all video devices */
-	elem=ms_web_cam_manager_get_list(ms_web_cam_manager_get());
+	elem=ms_web_cam_manager_get_list(ms_factory_get_web_cam_manager(lc->factory));
 	ndev=ms_list_size(elem);
 	devices=ms_malloc((ndev+1)*sizeof(const char *));
 	for (i=0;elem!=NULL;elem=elem->next,i++){
@@ -1587,7 +1589,8 @@ static void linphone_core_register_default_codecs(LinphoneCore *lc){
 	/*default enabled audio codecs, in order of preference*/
 #if defined(__arm__) || defined(_M_ARM)
 	/*hack for opus, that needs to be disabed by default on ARM single processor, otherwise there is no cpu left for video processing*/
-	if (ms_get_cpu_count()==1) opus_enabled=FALSE;
+	//if (ms_get_cpu_count()==1) opus_enabled=FALSE;
+	if (ms_factory_get_cpu_count(lc->factory)==1) opus_enabled=FALSE;
 #endif
 	linphone_core_register_payload_type(lc,&payload_type_opus,"useinbandfec=1",opus_enabled);
 	linphone_core_register_payload_type(lc,&payload_type_silk_wb,NULL,TRUE);
@@ -1686,16 +1689,15 @@ static void linphone_core_init(LinphoneCore * lc, const LinphoneCoreVTable *vtab
 	linphone_core_set_state(lc,LinphoneGlobalStartup,"Starting up");
 	ortp_init();
 	linphone_core_activate_log_serialization_if_needed();
-
-	ms_init();
-
+	
+	lc->factory = ms_factory_new_with_voip();
 	linphone_core_register_default_codecs(lc);
 	linphone_core_register_offer_answer_providers(lc);
 	/* Get the mediastreamer2 event queue */
 	/* This allows to run event's callback in linphone_core_iterate() */
-	lc->msevq=ms_factory_create_event_queue(ms_factory_get_fallback());
-
-	lc->sal=sal_init();
+	lc->msevq=ms_factory_create_event_queue(lc->factory);
+	
+	lc->sal=sal_init(lc->factory);
 	sal_set_http_proxy_host(lc->sal, linphone_core_get_http_proxy_host(lc));
 	sal_set_http_proxy_port(lc->sal, linphone_core_get_http_proxy_port(lc));
 
@@ -3324,7 +3326,7 @@ void linphone_core_notify_incoming_call(LinphoneCore *lc, LinphoneCall *call){
 		if (lc->ringstream && lc->dmfs_playing_start_time!=0){
 			linphone_core_stop_dtmf_stream(lc);
 		}
-		linphone_ringtoneplayer_start(lc->ringtoneplayer, ringcard, lc->sound_conf.local_ring, 2000);
+		linphone_ringtoneplayer_start(lc->factory, lc->ringtoneplayer, ringcard, lc->sound_conf.local_ring, 2000);
 	}else{
 		/* else play a tone within the context of the current call */
 		call->ringing_beep=TRUE;
@@ -4499,10 +4501,10 @@ void linphone_core_set_rec_level(LinphoneCore *lc, int level)
 	if (sndcard) ms_snd_card_set_level(sndcard,MS_SND_CARD_CAPTURE,level);
 }
 
-static MSSndCard *get_card_from_string_id(const char *devid, unsigned int cap){
+static MSSndCard *get_card_from_string_id(const char *devid, unsigned int cap, MSFactory *f){
 	MSSndCard *sndcard=NULL;
 	if (devid!=NULL){
-		sndcard=ms_snd_card_manager_get_card(ms_snd_card_manager_get(),devid);
+		sndcard=ms_snd_card_manager_get_card(ms_factory_get_snd_card_manager(f),devid);
 		if (sndcard!=NULL &&
 			(ms_snd_card_get_capabilities(sndcard) & cap)==0 ){
 			ms_warning("%s card does not have the %s capability, ignoring.",
@@ -4513,15 +4515,15 @@ static MSSndCard *get_card_from_string_id(const char *devid, unsigned int cap){
 	}
 	if (sndcard==NULL) {
 		if ((cap & MS_SND_CARD_CAP_CAPTURE) && (cap & MS_SND_CARD_CAP_PLAYBACK)){
-			sndcard=ms_snd_card_manager_get_default_card(ms_snd_card_manager_get());
+			sndcard=ms_snd_card_manager_get_default_card(ms_factory_get_snd_card_manager(f));
 		}else if (cap & MS_SND_CARD_CAP_CAPTURE){
-			sndcard=ms_snd_card_manager_get_default_capture_card(ms_snd_card_manager_get());
+			sndcard=ms_snd_card_manager_get_default_capture_card(ms_factory_get_snd_card_manager(f));
 		}
 		else if (cap & MS_SND_CARD_CAP_PLAYBACK){
-			sndcard=ms_snd_card_manager_get_default_playback_card(ms_snd_card_manager_get());
+			sndcard=ms_snd_card_manager_get_default_playback_card(ms_factory_get_snd_card_manager(f));
 		}
 		if (sndcard==NULL){/*looks like a bug! take the first one !*/
-			const MSList *elem=ms_snd_card_manager_get_list(ms_snd_card_manager_get());
+			const MSList *elem=ms_snd_card_manager_get_list(ms_factory_get_snd_card_manager(f));
 			if (elem) sndcard=(MSSndCard*)elem->data;
 		}
 	}
@@ -4538,7 +4540,7 @@ static MSSndCard *get_card_from_string_id(const char *devid, unsigned int cap){
 **/
 bool_t linphone_core_sound_device_can_capture(LinphoneCore *lc, const char *devid){
 	MSSndCard *sndcard;
-	sndcard=ms_snd_card_manager_get_card(ms_snd_card_manager_get(),devid);
+	sndcard=ms_snd_card_manager_get_card(ms_factory_get_snd_card_manager(lc->factory),devid);
 	if (sndcard!=NULL && (ms_snd_card_get_capabilities(sndcard) & MS_SND_CARD_CAP_CAPTURE)) return TRUE;
 	return FALSE;
 }
@@ -4552,7 +4554,7 @@ bool_t linphone_core_sound_device_can_capture(LinphoneCore *lc, const char *devi
 **/
 bool_t linphone_core_sound_device_can_playback(LinphoneCore *lc, const char *devid){
 	MSSndCard *sndcard;
-	sndcard=ms_snd_card_manager_get_card(ms_snd_card_manager_get(),devid);
+	sndcard=ms_snd_card_manager_get_card(ms_factory_get_snd_card_manager(lc->factory),devid);
 	if (sndcard!=NULL && (ms_snd_card_get_capabilities(sndcard) & MS_SND_CARD_CAP_PLAYBACK)) return TRUE;
 	return FALSE;
 }
@@ -4565,7 +4567,7 @@ bool_t linphone_core_sound_device_can_playback(LinphoneCore *lc, const char *dev
  * @param devid the device name as returned by linphone_core_get_sound_devices()
 **/
 int linphone_core_set_ringer_device(LinphoneCore *lc, const char * devid){
-	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_PLAYBACK);
+	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_PLAYBACK, lc->factory);
 	lc->sound_conf.ring_sndcard=card;
 	if (card && linphone_core_ready(lc))
 		lp_config_set_string(lc->config,"sound","ringer_dev_id",ms_snd_card_get_string_id(card));
@@ -4580,7 +4582,7 @@ int linphone_core_set_ringer_device(LinphoneCore *lc, const char * devid){
  * @param devid the device name as returned by linphone_core_get_sound_devices()
 **/
 int linphone_core_set_playback_device(LinphoneCore *lc, const char * devid){
-	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_PLAYBACK);
+	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_PLAYBACK, lc->factory);
 	lc->sound_conf.play_sndcard=card;
 	if (card &&  linphone_core_ready(lc))
 		lp_config_set_string(lc->config,"sound","playback_dev_id",ms_snd_card_get_string_id(card));
@@ -4595,7 +4597,7 @@ int linphone_core_set_playback_device(LinphoneCore *lc, const char * devid){
  * @param devid the device name as returned by linphone_core_get_sound_devices()
 **/
 int linphone_core_set_capture_device(LinphoneCore *lc, const char * devid){
-	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_CAPTURE);
+	MSSndCard *card=get_card_from_string_id(devid,MS_SND_CARD_CAP_CAPTURE, lc->factory);
 	lc->sound_conf.capt_sndcard=card;
 	if (card &&  linphone_core_ready(lc))
 		lp_config_set_string(lc->config,"sound","capture_dev_id",ms_snd_card_get_string_id(card));
@@ -4678,7 +4680,7 @@ void linphone_core_reload_sound_devices(LinphoneCore *lc){
 	if (capture != NULL) {
 		capture_copy = ms_strdup(capture);
 	}
-	ms_snd_card_manager_reload(ms_snd_card_manager_get());
+	ms_snd_card_manager_reload(ms_factory_get_snd_card_manager(lc->factory));
 	build_sound_devices_table(lc);
 	if (ringer_copy != NULL) {
 		linphone_core_set_ringer_device(lc, ringer_copy);
@@ -4700,7 +4702,7 @@ void linphone_core_reload_video_devices(LinphoneCore *lc){
 	if (devid != NULL) {
 		devid_copy = ms_strdup(devid);
 	}
-	ms_web_cam_manager_reload(ms_web_cam_manager_get());
+	ms_web_cam_manager_reload(ms_factory_get_web_cam_manager(lc->factory));
 	build_video_devices_table(lc);
 	if (devid_copy != NULL) {
 		linphone_core_set_video_device(lc, devid_copy);
@@ -4826,13 +4828,16 @@ int linphone_core_preview_ring(LinphoneCore *lc, const char *ring,LinphoneCoreCb
 	}
 	lc_callback_obj_init(&lc->preview_finished_cb,end_of_ringtone,userdata);
 	lc->preview_finished=0;
-	err = linphone_ringtoneplayer_start_with_cb(lc->ringtoneplayer, ringcard, ring, -1, notify_end_of_ringtone,(void *)lc);
+	err = linphone_ringtoneplayer_start_with_cb(lc->factory, lc->ringtoneplayer, ringcard, ring, -1, notify_end_of_ringtone,(void *)lc);
 	if (err) {
 		lc->preview_finished=1;
 	}
 	return err;
 }
 
+MSFactory *linphone_core_get_ms_factory(LinphoneCore *lc){
+	return lc->factory;
+}
 /**
  * Sets the path to a wav file used for ringing back.
  *
@@ -5276,6 +5281,7 @@ static void toggle_video_preview(LinphoneCore *lc, bool_t val){
 				video_preview_set_native_window_id(lc->previewstream,lc->preview_window_id);
 			video_preview_set_fps(lc->previewstream,linphone_core_get_preferred_framerate(lc));
 			video_preview_start(lc->previewstream,lc->video_conf.device);
+			lc->previewstream->ms.factory = lc->factory;
 		}
 	}else{
 		if (lc->previewstream!=NULL){
@@ -5447,13 +5453,13 @@ int linphone_core_set_video_device(LinphoneCore *lc, const char *id){
 	MSWebCam *olddev=lc->video_conf.device;
 	const char *vd;
 	if (id!=NULL){
-		lc->video_conf.device=ms_web_cam_manager_get_cam(ms_web_cam_manager_get(),id);
+		lc->video_conf.device=ms_web_cam_manager_get_cam(ms_factory_get_web_cam_manager(lc->factory),id);
 		if (lc->video_conf.device==NULL){
 			ms_warning("Could not find video device %s",id);
 		}
 	}
 	if (lc->video_conf.device==NULL)
-		lc->video_conf.device=ms_web_cam_manager_get_default_cam(ms_web_cam_manager_get());
+		lc->video_conf.device=ms_web_cam_manager_get_default_cam(ms_factory_get_web_cam_manager(lc->factory));
 	if (olddev!=NULL && olddev!=lc->video_conf.device){
 		toggle_video_preview(lc,FALSE);/*restart the video local preview*/
 	}
@@ -5962,7 +5968,7 @@ static MSFilter *get_audio_resource(LinphoneCore *lc, LinphoneAudioResourceType 
 		if (ringcard == NULL)
 			return NULL;
 
-		ringstream=lc->ringstream=ring_start(NULL,0,ringcard);
+		ringstream=lc->ringstream=ring_start(lc->factory, NULL,0,ringcard);
 		ms_filter_call_method(lc->ringstream->gendtmf,MS_DTMF_GEN_SET_DEFAULT_AMPLITUDE,&amp);
 		lc->dmfs_playing_start_time = ms_get_cur_time_ms()/1000;
 	}else{
@@ -6126,9 +6132,9 @@ void linphone_core_set_mtu(LinphoneCore *lc, int mtu){
 			ms_error("MTU too small !");
 			mtu=500;
 		}
-		ms_set_mtu(mtu);
-		ms_message("MTU is supposed to be %i, rtp payload max size will be %i",mtu, ms_get_payload_max_size());
-	}else ms_set_mtu(0);//use mediastreamer2 default value
+		ms_factory_set_mtu(lc->factory, mtu);
+		ms_message("MTU is supposed to be %i, rtp payload max size will be %i",mtu, ms_factory_get_payload_max_size(lc->factory));
+	}else ms_factory_set_mtu(lc->factory, 0);//use mediastreamer2 default value
 }
 
 void linphone_core_set_waiting_callback(LinphoneCore *lc, LinphoneCoreWaitingCallback cb, void *user_context){
@@ -6491,10 +6497,12 @@ static void linphone_core_uninit(LinphoneCore *lc)
 	linphone_core_message_storage_close(lc);
 	linphone_core_call_log_storage_close(lc);
 	linphone_core_friends_storage_close(lc);
-	ms_exit();
+	
 	linphone_core_set_state(lc,LinphoneGlobalOff,"Off");
 	linphone_core_deactivate_log_serialization_if_needed();
 	ms_list_free_with_data(lc->vtable_refs,(void (*)(void *))v_table_reference_destroy);
+	
+	ms_factory_destroy(lc->factory);
 }
 
 static void set_sip_network_reachable(LinphoneCore* lc,bool_t is_sip_reachable, time_t curtime){

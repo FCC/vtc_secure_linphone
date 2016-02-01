@@ -294,9 +294,11 @@ LocalConference::LocalConference(LinphoneCore *core, const Conference::Params *p
 	m_recordEndpoint(NULL),
 	m_localDummyProfile(NULL),
 	m_terminated(FALSE) {
+
 	MSAudioConferenceParams ms_conf_params;
 	ms_conf_params.samplerate = lp_config_get_int(m_core->config, "sound","conference_rate",16000);
-	m_conf=ms_audio_conference_new(&ms_conf_params);
+	m_conf=ms_audio_conference_new(&ms_conf_params, core->factory);
+
 }
 
 LocalConference::~LocalConference() {
@@ -315,7 +317,7 @@ RtpProfile *LocalConference::sMakeDummyProfile(int samplerate){
 void LocalConference::addLocalEndpoint() {
 	/*create a dummy audiostream in order to extract the local part of it */
 	/* network address and ports have no meaning and are not used here. */
-	AudioStream *st=audio_stream_new(65000,65001,FALSE);
+	AudioStream *st=audio_stream_new(m_core->factory, 65000,65001,FALSE);
 	MSSndCard *playcard=m_core->sound_conf.lsd_card ?
 			m_core->sound_conf.lsd_card : m_core->sound_conf.play_sndcard;
 	MSSndCard *captcard=m_core->sound_conf.capt_sndcard;
@@ -527,7 +529,7 @@ int LocalConference::startRecording(const char *path) {
 		return -1;
 	}
 	if (m_recordEndpoint==NULL){
-		m_recordEndpoint=ms_audio_endpoint_new_recorder();
+		m_recordEndpoint=ms_audio_endpoint_new_recorder(m_core->factory);
 		ms_audio_conference_add_member(m_conf,m_recordEndpoint);
 	}
 	ms_audio_recorder_endpoint_start(m_recordEndpoint,path);

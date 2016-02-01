@@ -248,7 +248,7 @@ LinphoneCoreManager *get_manager(LinphoneCore *lc){
 }
 
 bool_t transport_supported(LinphoneTransportType transport) {
-	Sal *sal = sal_init();
+	Sal *sal = sal_init(NULL);
 	bool_t supported = sal_transport_available(sal,(SalTransport)transport);
 	if (!supported) ms_message("TLS transport not supported, falling back to TCP if possible otherwise skipping test.");
 	sal_uninit(sal);
@@ -296,13 +296,13 @@ void linphone_core_manager_init(LinphoneCoreManager *mgr, const char* rc_file) {
 	{
 		MSWebCam *cam;
 
-		cam = ms_web_cam_manager_get_cam(ms_web_cam_manager_get(), "Mire: Mire (synthetic moving picture)");
+		cam = ms_web_cam_manager_get_cam(ms_factory_get_web_cam_manager(mgr->lc->factory), "Mire: Mire (synthetic moving picture)");
 
 		if (cam == NULL) {
 			MSWebCamDesc *desc = ms_mire_webcam_desc_get();
 			if (desc){
 				cam=ms_web_cam_new(desc);
-				ms_web_cam_manager_add_cam(ms_web_cam_manager_get(), cam);
+				ms_web_cam_manager_add_cam(ms_factory_get_web_cam_manager(mgr->lc->factory), cam);
 			}
 		}
 	}

@@ -889,6 +889,7 @@ void linphone_task_list_free(LinphoneTaskList *t);
 
 struct _LinphoneCore
 {
+	MSFactory* factory;
 	MSList* vtable_refs;
 	Sal *sal;
 	LinphoneGlobalState state;
@@ -1047,6 +1048,7 @@ bool_t linphone_core_is_payload_type_usable_for_bandwidth(LinphoneCore *lc, cons
 void _linphone_core_configure_resolver(void);
 
 struct _EcCalibrator{
+	MSFactory *factory;
 	ms_thread_t thread;
 	MSSndCard *play_card,*capt_card;
 	MSFilter *sndread,*det,*rec;
@@ -1495,7 +1497,7 @@ void _linphone_core_add_listener(LinphoneCore *lc, LinphoneCoreVTable *vtable, b
 
 #ifdef VIDEO_ENABLED
 LINPHONE_PUBLIC MSWebCam *linphone_call_get_video_device(const LinphoneCall *call);
-MSWebCam *get_nowebcam_device(void);
+MSWebCam *get_nowebcam_device(MSFactory *f);
 #endif
 bool_t linphone_core_lime_for_file_sharing_enabled(const LinphoneCore *lc);
 
