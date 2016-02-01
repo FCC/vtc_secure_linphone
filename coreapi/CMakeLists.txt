@@ -20,7 +20,7 @@
 #
 ############################################################################
 
-if(MSVC AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone")
+if(MSVC AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone" AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
 	find_library(LIBGCC NAMES gcc)
 	find_library(LIBMINGWEX NAMES mingwex)
 endif()
@@ -35,6 +35,8 @@ set(LINPHONE_HEADER_FILES
 	buffer.h
 	call_log.h
 	call_params.h
+	carddav.h
+	conference.h
 	content.h
 	event.h
 	friendlist.h
@@ -75,6 +77,7 @@ set(LINPHONE_SOURCE_FILES_C
 	callbacks.c
 	call_log.c
 	call_params.c
+	carddav.c
 	chat.c
 	chat_file_transfer.c
 	contactprovider.c
@@ -145,10 +148,6 @@ add_definitions(
 	-DLIBLINPHONE_EXPORTS
 )
 
-apply_compile_flags(LINPHONE_SOURCE_FILES_C "CPP" "C")
-apply_compile_flags(LINPHONE_SOURCE_FILES_CXX "CPP" "CXX")
-apply_compile_flags(LINPHONE_SOURCE_FILES_OBJC "CPP" "OBJC")
-
 set(LIBS
 	${BELLESIP_LIBRARIES}
 	${MEDIASTREAMER2_LIBRARIES}
@@ -166,10 +165,10 @@ endif()
 if(ENABLE_TUNNEL)
 	list(APPEND LIBS ${TUNNEL_LIBRARIES})
 endif()
-if(MSVC AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone")
+if(MSVC AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone" AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
 	list(APPEND LIBS ${LIBGCC} ${LIBMINGWEX})
 endif()
-if(WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone")
+if(WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone" AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
 	list(APPEND LIBS shlwapi)
 endif()
 if(INTL_FOUND)
@@ -178,13 +177,13 @@ endif()
 if(BELCARD_FOUND)
 	list(APPEND LIBS ${BELCARD_LIBRARIES})
 	list(APPEND LINPHONE_SOURCE_FILES_CXX vcard.cc)
-	add_definitions(-DVCARD_ENABLED)
 else()
 	list(APPEND LINPHONE_SOURCE_FILES_C vcard_stubs.c)
 endif()
 
 apply_compile_flags(LINPHONE_SOURCE_FILES_C "CPP" "C")
 apply_compile_flags(LINPHONE_SOURCE_FILES_CXX "CPP" "CXX")
+apply_compile_flags(LINPHONE_SOURCE_FILES_OBJC "CPP" "OBJC")
 
 if(ENABLE_STATIC)
 	add_library(linphone STATIC ${LINPHONE_HEADER_FILES} ${LINPHONE_SOURCE_FILES_C} ${LINPHONE_SOURCE_FILES_CXX} ${LINPHONE_SOURCE_FILES_OBJC})
@@ -206,7 +205,7 @@ if(IOS)
 	target_link_libraries(linphone "-framework Foundation" "-framework AVFoundation")
 endif()
 add_dependencies(linphone liblinphone-git-version)
-if(WIN32 AND CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone")
+if(WIN32 AND CMAKE_SYSTEM_NAME STREQUAL "WindowsPhone" AND NOT CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
 	set_target_properties(linphone PROPERTIES PREFIX "lib")
 endif()
 if(ICONV_FOUND)

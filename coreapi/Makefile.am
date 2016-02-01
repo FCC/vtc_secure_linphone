@@ -29,11 +29,13 @@ linphone_include_HEADERS=\
 	buffer.h \
 	call_log.h \
 	call_params.h \
+	conference.h \
 	content.h \
 	event.h \
 	friendlist.h \
 	linphonecore.h \
 	linphonecore_utils.h \
+	ringtoneplayer.h \
 	linphonefriend.h \
 	linphonepresence.h \
 	linphone_proxy_config.h \
@@ -43,6 +45,7 @@ linphone_include_HEADERS=\
 	sipsetup.h \
 	xml2lpc.h \
 	xmlrpc.h \
+	vcard.h \
 	carddav.h
 
 lib_LTLIBRARIES=liblinphone.la
@@ -57,7 +60,7 @@ liblinphone_la_SOURCES=\
 	call_params.c \
 	chat.c \
 	chat_file_transfer.c \
-	conference.cc conference.h \
+	conference.cc conference_private.h \
 	contactprovider.c contactprovider.h contact_providers_priv.h \
 	content.c \
 	dict.c \
@@ -120,10 +123,10 @@ liblinphone_la_SOURCES+=linphone_tunnel_stubs.c linphone_tunnel.h
 endif
 
 if BUILD_VCARD
-liblinphone_la_SOURCES+=vcard.cc vcard.h
+liblinphone_la_SOURCES+=vcard.cc
 liblinphone_la_CXXFLAGS=-std=c++11
 else
-liblinphone_la_SOURCES+=vcard_stubs.c vcard.h
+liblinphone_la_SOURCES+=vcard_stubs.c
 endif
 
 liblinphone_la_LDFLAGS= -version-info $(LIBLINPHONE_SO_VERSION) -no-undefined
@@ -157,6 +160,7 @@ liblinphone_la_LIBADD= \
 
 
 AM_CPPFLAGS=\
+	-DIN_LINPHONE \
 	-I$(top_srcdir) -I$(top_srcdir)/include -I$(builddir) \
 	$(ORTP_CFLAGS) \
 	$(MEDIASTREAMER_CFLAGS) \

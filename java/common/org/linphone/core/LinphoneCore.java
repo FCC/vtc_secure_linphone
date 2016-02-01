@@ -1000,9 +1000,14 @@ public interface LinphoneCore {
 	void addFriend(LinphoneFriend lf) throws LinphoneCoreException;
 	
 	/**
-	 * Sets the friend list for the linphone core.
+	 * Adds the friend list to the linphone core.
 	 */
-	void setFriendList(LinphoneFriendList friendList) throws LinphoneCoreException;
+	void addFriendList(LinphoneFriendList friendList) throws LinphoneCoreException;
+	
+	/**
+	 * Removes the friend list from the linphone core.
+	 */
+	void removeFriendList(LinphoneFriendList friendList) throws LinphoneCoreException;
 	
 	/**
 	 * Creates a friend list.
@@ -1349,6 +1354,19 @@ public interface LinphoneCore {
 	void enableEchoLimiter(boolean val);
 
 	/**
+	 * Create a conference
+	 * @param params Parameters of the conference. Can be null
+	 * @return The new conference or null if the creation has failed
+	 */
+	LinphoneConference createConference(LinphoneConferenceParams params);
+	/**
+	 * Return the value of the C pointer on the conference instance.
+	 *
+	 * That function can be used to test whether a conference is running.
+	 * @return A positive value if a conference is running, 0 if not.
+	 **/
+	LinphoneConference getConference();
+	/**
 	 * Indicates whether the local user is part of the conference.
 	**/
 	boolean isInConference();
@@ -1368,7 +1386,6 @@ public interface LinphoneCore {
 	 * When the local participant is out of the conference, the remote participants can continue to talk normally.
 	**/
 	void leaveConference();
-
 	/**
 	 * Merge a call into a conference.
 	 *
@@ -1417,13 +1434,6 @@ public interface LinphoneCore {
 	 * @returns the number of participants to the conference
 	**/
 	int getConferenceSize();
-	/**
-	 * Return the value of the C pointer on the conference instance.
-	 * 
-	 * That function can be used to test whether a conference is running.
-	 * @return A positive value if a conference is running, 0 if not.
-	**/
-	LinphoneConference getConference();
 
 	/**
 	 * Request recording of the conference into a supplied file path.
@@ -2261,7 +2271,29 @@ public interface LinphoneCore {
 	public int importFriendsFromVCardFile(String file);
 	
 	/**
+	 * Imports LinphoneFriends from a vCard 4 buffer
+	 * @return the number of friend imported
+	**/
+	public int importFriendsFromVCardBuffer(String buffer);
+	
+	/**
 	 * Exports LinphoneFriends to a vCard 4 file
 	**/
 	public void exportFriendsToVCardFile(String file);
+
+	/**
+	 * This method is called by the application to notify the linphone core library when the SIP network is reachable.
+	 * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+	 * Most applications just need LinphoneCore.setNetworkReachable().
+	 * @param isReachable whether SIP network is reachable.
+	 */
+	public void setSipNetworkReachable(boolean isReachable);
+	
+	/**
+	 * This method is called by the application to notify the linphone core library when the media (RTP) network is reachable.
+	 * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+	 * Most applications just need LinphoneCore.setNetworkReachable().
+	 * @param isReachable whether media network is reachable.
+	 */
+	public void setMediaNetworkReachable(boolean isReachable);
 }

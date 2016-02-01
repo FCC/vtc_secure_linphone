@@ -96,21 +96,21 @@ LINPHONE_PUBLIC const char* linphone_vcard_get_full_name(const LinphoneVCard *vC
  * @param[in] vCard the LinphoneVCard
  * @param[in] sip_address the SIP address to add
  */
-LINPHONE_PUBLIC void linphone_vcard_add_sip_address(LinphoneVCard *vCard, const char *sip_address);
+void linphone_vcard_add_sip_address(LinphoneVCard *vCard, const char *sip_address);
 
 /**
  * Removes a SIP address in the vCard (if it exists), using the IMPP property
  * @param[in] vCard the LinphoneVCard
  * @param[in] sip_address the SIP address to remove
  */
-LINPHONE_PUBLIC void linphone_vcard_remove_sip_address(LinphoneVCard *vCard, const char *sip_address);
+void linphone_vcard_remove_sip_address(LinphoneVCard *vCard, const char *sip_address);
 
 /**
  * Edits the preferred SIP address in the vCard (or the first one), using the IMPP property
  * @param[in] vCard the LinphoneVCard
  * @param[in] sip_address the new SIP address
  */
-LINPHONE_PUBLIC void linphone_vcard_edit_main_sip_address(LinphoneVCard *vCard, const char *sip_address);
+void linphone_vcard_edit_main_sip_address(LinphoneVCard *vCard, const char *sip_address);
 
 /**
  * Returns the list of SIP addresses (as const char *) in the vCard (all the IMPP attributes that has an URI value starting by "sip:") or NULL
@@ -125,7 +125,7 @@ LINPHONE_PUBLIC MSList* linphone_vcard_get_sip_addresses(const LinphoneVCard *vC
  * @param[in] vCard the LinphoneVCard
  * @return TRUE if operation is successful, otherwise FALSE (for example if it already has an unique ID)
  */
-LINPHONE_PUBLIC bool_t linphone_vcard_generate_unique_id(LinphoneVCard *vCard);
+bool_t linphone_vcard_generate_unique_id(LinphoneVCard *vCard);
 
 /**
  * Sets the unique ID of the vCard
@@ -139,35 +139,48 @@ void linphone_vcard_set_uid(LinphoneVCard *vCard, const char *uid);
  * @param[in] vCard the LinphoneVCard
  * @return the UID of the vCard, otherwise NULL
  */
-const char* linphone_vcard_get_uid(const LinphoneVCard *vCard);
+LINPHONE_PUBLIC const char* linphone_vcard_get_uid(const LinphoneVCard *vCard);
 
 /**
  * Sets the eTAG of the vCard
  * @param[in] vCard the LinphoneVCard
  * @param[in] etag the eTAG
  */
-void linphone_vcard_set_etag(LinphoneVCard *vCard, const char * etag);
+LINPHONE_PUBLIC void linphone_vcard_set_etag(LinphoneVCard *vCard, const char * etag);
 
 /**
  * Gets the eTag of the vCard
  * @param[in] vCard the LinphoneVCard
  * @return the eTag of the vCard in the CardDAV server, otherwise NULL
  */
-const char* linphone_vcard_get_etag(const LinphoneVCard *vCard);
+LINPHONE_PUBLIC const char* linphone_vcard_get_etag(const LinphoneVCard *vCard);
 
 /**
  * Sets the URL of the vCard
  * @param[in] vCard the LinphoneVCard
  * @param[in] url the URL
  */
-void linphone_vcard_set_url(LinphoneVCard *vCard, const char * url);
+LINPHONE_PUBLIC void linphone_vcard_set_url(LinphoneVCard *vCard, const char * url);
 
 /**
  * Gets the URL of the vCard
  * @param[in] vCard the LinphoneVCard
  * @return the URL of the vCard in the CardDAV server, otherwise NULL
  */
-const char* linphone_vcard_get_url(const LinphoneVCard *vCard);
+LINPHONE_PUBLIC const char* linphone_vcard_get_url(const LinphoneVCard *vCard);
+
+/**
+ * Computes the md5 hash for the vCard
+ * @param[in] vCard the LinphoneVCard
+ */
+void linphone_vcard_compute_md5_hash(LinphoneVCard *vCard);
+
+/**
+ * Compares the previously computed md5 hash (using linphone_vcard_compute_md5_hash) with the current one
+ * @param[in] vCard the LinphoneVCard
+ * @return 0 if the md5 hasn't changed, 1 otherwise
+ */
+bool_t linphone_vcard_compare_md5_hash(LinphoneVCard *vCard);
 
 /**
  * @}

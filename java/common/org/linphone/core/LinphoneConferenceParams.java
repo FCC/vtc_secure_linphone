@@ -1,6 +1,6 @@
 /*
-LinphoneFriend.java
-Copyright (C) 2010  Belledonne Communications, Grenoble, France
+LinphoneConferenceParams.java
+Copyright (C) 2015  Belledonne Communications, Grenoble, France
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -16,15 +16,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
+
 package org.linphone.core;
 
-
-public interface LinphoneFriendList {
-	public void  setRLSUri(String uri);
-	public void addFriend(LinphoneFriend friend);
-	public void updateSubscriptions(LinphoneProxyConfig proxyConfig,boolean onlyWhenRegistered);
-	public LinphoneFriend findFriendByUri(String uri);
-	public void setUri(String uri);
-	public void synchronizeFriendsFromServer();
-	long getNativePtr();	
+public interface LinphoneConferenceParams {
+	public void enableVideo(boolean enable);
+	public boolean isVideoRequested();
 }

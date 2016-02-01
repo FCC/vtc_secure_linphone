@@ -98,3 +98,11 @@ void linphone_vcard_set_url(LinphoneVCard *vCard, const char * url) {
 const char* linphone_vcard_get_url(const LinphoneVCard *vCard) {
 	return NULL;
 }
+
+void linphone_vcard_compute_md5_hash(LinphoneVCard *vCard) {
+	
+}
+
+bool_t linphone_vcard_compare_md5_hash(LinphoneVCard *vCard) {
+	return FALSE;
+}

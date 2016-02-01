@@ -89,6 +89,7 @@ RtpTransport *TunnelManager::createRtpTransport(int port){
 	t->t_close=sCloseRtpTransport;
 	t->t_destroy=sDestroyRtpTransport;
 	t->data=socket;
+	ms_message("Creating tunnel RTP transport for local virtual port %i", port);
 	return t;
 }
 
@@ -162,7 +163,7 @@ TunnelManager::~TunnelManager(){
 
 void TunnelManager::doRegistration(){
 	LinphoneProxyConfig* lProxy;
-	linphone_core_get_default_proxy(mCore, &lProxy);
+	lProxy = linphone_core_get_default_proxy_config(mCore);
 	if (lProxy) {
 		ms_message("TunnelManager: New registration");
 		lProxy->commit = TRUE;
@@ -171,7 +172,7 @@ void TunnelManager::doRegistration(){
 
 void TunnelManager::doUnregistration() {
 	LinphoneProxyConfig *lProxy;
-	linphone_core_get_default_proxy(mCore, &lProxy);
+	lProxy = linphone_core_get_default_proxy_config(mCore);
 	if(lProxy) {
 		_linphone_proxy_config_unregister(lProxy);
 	}

@@ -245,7 +245,7 @@ void linphone_core_notify_notify_received(LinphoneCore *lc, LinphoneEvent *lev, 
 }
 
 void linphone_core_notify_subscription_state_changed(LinphoneCore *lc, LinphoneEvent *lev, LinphoneSubscriptionState state) {
-	NOTIFY_IF_EXIST(subscription_state_changed, lc,lev,state);
+	NOTIFY_IF_EXIST_INTERNAL(subscription_state_changed,linphone_event_is_internal(lev), lc,lev,state);
 	cleanup_dead_vtable_refs(lc);
 }
 
@@ -261,6 +261,16 @@ void linphone_core_notify_log_collection_upload_state_changed(LinphoneCore *lc, 
 
 void linphone_core_notify_log_collection_upload_progress_indication(LinphoneCore *lc, size_t offset, size_t total) {
 	NOTIFY_IF_EXIST(log_collection_upload_progress_indication, lc, offset, total);
+	cleanup_dead_vtable_refs(lc);
+}
+
+void linphone_core_notify_friend_list_created(LinphoneCore *lc, LinphoneFriendList *list) {
+	NOTIFY_IF_EXIST(friend_list_created, lc, list);
+	cleanup_dead_vtable_refs(lc);
+}
+
+void linphone_core_notify_friend_list_removed(LinphoneCore *lc, LinphoneFriendList *list) {
+	NOTIFY_IF_EXIST(friend_list_removed, lc, list);
 	cleanup_dead_vtable_refs(lc);
 }
 

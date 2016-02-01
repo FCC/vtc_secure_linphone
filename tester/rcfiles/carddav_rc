@@ -5,7 +5,8 @@ mtu=1300
 ping_with_options=0
 sip_random_port=1
 
-[carddav]
-server_url=http://192.168.0.230/sabredav/addressbookserver.php/addressbooks/sylvain/default
+[auth_info_0]
+domain=192.168.0.230
 username=sylvain
 ha1=4747ce2517a985f2fc20234a38f068b6
+realm=SabreDAV

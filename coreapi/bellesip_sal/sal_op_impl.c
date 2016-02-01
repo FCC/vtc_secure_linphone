@@ -518,14 +518,14 @@ SalReason _sal_reason_from_sip_code(int code) {
 		return SalReasonNotImplemented;
 	case 502:
 		return SalReasonBadGateway;
+	case 503:
+		return SalReasonServiceUnavailable;
 	case 504:
 		return SalReasonServerTimeout;
 	case 600:
 		return SalReasonDoNotDisturb;
 	case 603:
 		return SalReasonDeclined;
-	case 503:
-		return SalReasonServiceUnavailable;
 	default:
 		return SalReasonUnknown;
 	}
@@ -701,7 +701,6 @@ void sal_op_assign_recv_headers(SalOp *op, belle_sip_message_t *incoming){
 const char *sal_op_get_remote_contact(const SalOp *op){
 	/*
 	 * remote contact is filled in process_response
-	 * return sal_custom_header_find(op->base.recv_custom_headers,"Contact");
 	 */
 	return op->base.remote_contact;
 }

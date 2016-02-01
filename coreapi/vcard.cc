@@ -21,11 +21,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "belcard/belcard.hpp"
 #include "belcard/belcard_parser.hpp"
 #include "sal/sal.h"
+#include <polarssl/md5.h>
 
 struct _LinphoneVCard {
 	shared_ptr<belcard::BelCard> belCard;
-	const char *etag;
-	const char *url;
+	char *etag;
+	char *url;
+	unsigned char *md5;
 };
 
 #ifdef __cplusplus
@@ -194,6 +196,12 @@ const char* linphone_vcard_get_uid(const LinphoneVCard *vCard) {
 }
 
 void linphone_vcard_set_etag(LinphoneVCard *vCard, const char * etag) {
+	if (!vCard) {
+		return;
+	}
+	if (vCard->etag) {
+		ms_free(vCard->etag);
+	}
 	vCard->etag = ms_strdup(etag);
 }
 
@@ -203,12 +211,50 @@ const char* linphone_vcard_get_etag(const LinphoneVCard *vCard) {
 }
 
 void linphone_vcard_set_url(LinphoneVCard *vCard, const char * url) {
+	if (!vCard) {
+		return;
+	}
+	if (vCard->url) {
+		ms_free(vCard->url);
+	}
 	vCard->url = ms_strdup(url);
 }
 
 const char* linphone_vcard_get_url(const LinphoneVCard *vCard) {
 	if (!vCard) return NULL;
 	return vCard->url;
+}
+
+#define VCARD_MD5_HASH_SIZE 16
+
+void linphone_vcard_compute_md5_hash(LinphoneVCard *vCard) {
+	unsigned char digest[VCARD_MD5_HASH_SIZE];
+	const char *text = NULL;
+	if (!vCard) {
+		return;
+	}
+	text = linphone_vcard_as_vcard4_string(vCard);
+	md5((unsigned char *)text, strlen(text), digest);
+	vCard->md5 = (unsigned char *)ms_malloc(sizeof(digest));
+	memcpy(vCard->md5, digest, sizeof(digest));
+}
+
+bool_t linphone_vcard_compare_md5_hash(LinphoneVCard *vCard) {
+	unsigned char *previous_md5 = vCard->md5;
+	unsigned char *new_md5 = NULL;
+	int result = -1;
+	
+	if (!previous_md5) {
+		return result;
+	}
+	
+	linphone_vcard_compute_md5_hash(vCard);
+	new_md5 = vCard->md5;
+	result = memcmp(new_md5, previous_md5, VCARD_MD5_HASH_SIZE);
+	
+	ms_free(previous_md5);
+	ms_free(new_md5);
+	return result;
 }
 
 #ifdef __cplusplus
