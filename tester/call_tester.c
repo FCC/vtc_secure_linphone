@@ -667,7 +667,7 @@ static void call_with_specified_codec_bitrate(void) {
 	int max_bw=50;
 
 #ifdef __arm__
-	if (ms_get_cpu_count() <2) { /*2 opus codec channel + resampler is too much for a single core*/
+	if (ms_factory_get_cpu_count(marie->lc->factory) <2) { /*2 opus codec channel + resampler is too much for a single core*/
 #ifndef ANDROID
 		codec = "speex";
 		rate = 8000;
@@ -5712,7 +5712,7 @@ static void call_logs_sqlite_storage(void) {
 	LinphoneCallLog *call_log = NULL;
 	LinphoneAddress *laure = NULL;
 	time_t user_data_time = time(NULL);
-	time_t start_time = NULL;
+	time_t start_time = 0;
 	unlink(logs_db);
 
 	linphone_core_set_call_logs_database_path(marie->lc, logs_db);
