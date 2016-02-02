@@ -50,6 +50,15 @@ typedef enum _LinphoneFriendListStatus {
 } LinphoneFriendListStatus;
 
 /**
+ * Enum describing the status of a CardDAV synchronization
+ */
+typedef enum _LinphoneFriendListSyncStatus {
+	LinphoneFriendListSyncStarted,
+	LinphoneFriendListSyncSuccessful,
+	LinphoneFriendListSyncFailure
+} LinphoneFriendListSyncStatus;
+
+/**
  * The LinphoneFriendList object representing a list of friends.
 **/
 typedef struct _LinphoneFriendList LinphoneFriendList;
@@ -145,12 +154,21 @@ LINPHONE_PUBLIC const char * linphone_friend_list_get_rls_uri(const LinphoneFrie
 LINPHONE_PUBLIC void linphone_friend_list_set_rls_uri(LinphoneFriendList *list, const char *rls_uri);
 
 /**
- * Add a friend to a friend list.
+ * Add a friend to a friend list. If or when a remote CardDAV server will be attached to the list, the friend will be sent to the server.
  * @param[in] list LinphoneFriendList object.
  * @param[in] friend LinphoneFriend object to add to the friend list.
  * @return LinphoneFriendListOK if successfully added, LinphoneFriendListInvalidFriend if the friend is not valid.
 **/
-LINPHONE_PUBLIC LinphoneFriendListStatus linphone_friend_list_add_friend(LinphoneFriendList *list, LinphoneFriend *afriend);
+LINPHONE_PUBLIC LinphoneFriendListStatus linphone_friend_list_add_friend(LinphoneFriendList *list, LinphoneFriend *lf);
+
+/**
+ * Add a friend to a friend list. The friend will never be sent to a remote CardDAV server.
+ * Warning! LinphoneFriends added this way will be removed on the next synchronization, and the callback contact_deleted will be called.
+ * @param[in] list LinphoneFriendList object.
+ * @param[in] friend LinphoneFriend object to add to the friend list.
+ * @return LinphoneFriendListOK if successfully added, LinphoneFriendListInvalidFriend if the friend is not valid.
+**/
+LINPHONE_PUBLIC LinphoneFriendListStatus linphone_friend_list_add_local_friend(LinphoneFriendList *list, LinphoneFriend *lf);
 
 /**
  * Remove a friend from a friend list.
@@ -159,6 +177,13 @@ LINPHONE_PUBLIC LinphoneFriendListStatus linphone_friend_list_add_friend(Linphon
  * @return LinphoneFriendListOK if removed successfully, LinphoneFriendListNonExistentFriend if the friend is not in the list.
 **/
 LINPHONE_PUBLIC LinphoneFriendListStatus linphone_friend_list_remove_friend(LinphoneFriendList *list, LinphoneFriend *afriend);
+
+/**
+ * Retrieves the list of LinphoneFriend from this LinphoneFriendList.
+ * @param[in] list LinphoneFriendList object
+ * @return \mslist{LinphoneFriend} a list of LinphoneFriend
+ */
+LINPHONE_PUBLIC const MSList * linphone_friend_list_get_friends(const LinphoneFriendList *list);
 
 /**
  * Find a friend in the friend list using a LinphoneAddress.
@@ -237,6 +262,11 @@ typedef void (*LinphoneFriendListContactDeletedCb)(LinphoneFriendList *list, Lin
 typedef void (*LinphoneFriendListContactUpdatedCb)(LinphoneFriendList *list, LinphoneFriend *new_friend, LinphoneFriend *old_friend);
 
 /**
+ * Callback used to notify the status of the synchronization has changed
+**/
+typedef void (*LinphoneFriendListSyncStateChangedCb)(LinphoneFriendList *list, LinphoneFriendListSyncStatus status, const char *msg);
+
+/**
  * Get the LinphoneFriendListCbs object associated with a LinphoneFriendList.
  * @param[in] request LinphoneXmlRpcRequest object
  * @return The LinphoneFriendListCbs object associated with the LinphoneFriendList.
@@ -311,6 +341,20 @@ LINPHONE_PUBLIC LinphoneFriendListContactUpdatedCb linphone_friend_list_cbs_get_
  * @param[in] cb The contact updated to be used.
 **/
 LINPHONE_PUBLIC void linphone_friend_list_cbs_set_contact_updated(LinphoneFriendListCbs *cbs, LinphoneFriendListContactUpdatedCb cb);
+
+/**
+ * Get the sync status changed callback.
+ * @param[in] cbs LinphoneFriendListCbs object.
+ * @return The current sync status changedcallback.
+**/
+LINPHONE_PUBLIC LinphoneFriendListSyncStateChangedCb linphone_friend_list_cbs_get_sync_status_changed(const LinphoneFriendListCbs *cbs);
+
+/**
+ * Set the contact updated callback.
+ * @param[in] cbs LinphoneFriendListCbs object.
+ * @param[in] cb The sync status changed to be used.
+**/
+LINPHONE_PUBLIC void linphone_friend_list_cbs_set_sync_status_changed(LinphoneFriendListCbs *cbs, LinphoneFriendListSyncStateChangedCb cb);
 
 /**
  * Starts a CardDAV synchronization using value set using linphone_friend_list_set_uri.

@@ -353,6 +353,7 @@ LINPHONE_PUBLIC void linphone_core_interpret_friend_uri(LinphoneCore *lc, const 
  * Add a friend to the current buddy list, if \link linphone_friend_enable_subscribes() subscription attribute \endlink is set, a SIP SUBSCRIBE message is sent.
  * @param lc #LinphoneCore object
  * @param fr #LinphoneFriend to add
+ * @deprecated use linphone_friend_list_add_friend() instead.
  */
 LINPHONE_PUBLIC	void linphone_core_add_friend(LinphoneCore *lc, LinphoneFriend *fr);
 
@@ -360,6 +361,7 @@ LINPHONE_PUBLIC	void linphone_core_add_friend(LinphoneCore *lc, LinphoneFriend *
  * Removes a friend from the buddy list
  * @param lc #LinphoneCore object
  * @param fr #LinphoneFriend to remove
+ * @deprecated use linphone_friend_list_remove_friend() instead.
  */
 LINPHONE_PUBLIC void linphone_core_remove_friend(LinphoneCore *lc, LinphoneFriend *fr);
 
@@ -374,6 +376,7 @@ LINPHONE_PUBLIC void linphone_core_reject_subscriber(LinphoneCore *lc, LinphoneF
  * Get Buddy list of LinphoneFriend
  * @param[in] lc #LinphoneCore object
  * @return \mslist{LinphoneFriend}
+ * @deprecated use linphone_core_get_friends_lists() or linphone_friend_list_get_friends() instead.
  */
 LINPHONE_PUBLIC	const MSList * linphone_core_get_friend_list(const LinphoneCore *lc);
 

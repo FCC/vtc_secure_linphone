@@ -55,6 +55,7 @@ void* linphone_carddav_get_user_data(LinphoneCardDavContext *cdc) {
 }
 
 void linphone_carddav_synchronize(LinphoneCardDavContext *cdc) {
+	cdc->ctag = cdc->friend_list->revision;
 	linphone_carddav_get_current_ctag(cdc);
 }
 
@@ -132,7 +133,7 @@ static void linphone_carddav_vcards_pulled(LinphoneCardDavContext *cdc, MSList *
 		}
 	}
 	ms_list_free(vCards);
-	linphone_carddav_sync_done(cdc, TRUE, "");
+	linphone_carddav_sync_done(cdc, TRUE, NULL);
 }
 
 static MSList* parse_vcards_from_xml_response(const char *body) {
@@ -341,7 +342,7 @@ static void process_response_from_carddav_request(void *data, const belle_http_r
 							}
 							linphone_vcard_set_etag(lvc, etag);
 
-							linphone_carddav_sync_done(query->context, TRUE, "");
+							linphone_carddav_sync_done(query->context, TRUE, NULL);
 							linphone_friend_unref(lf);
 						} else {
 							// For some reason, server didn't return the eTag of the updated/created vCard
@@ -361,7 +362,7 @@ static void process_response_from_carddav_request(void *data, const belle_http_r
 				}
 				break;
 			case LinphoneCardDavQueryTypeDelete:
-				linphone_carddav_sync_done(query->context, TRUE, "");
+				linphone_carddav_sync_done(query->context, TRUE, NULL);
 				break;
 			default:
 				ms_error("Unknown request: %i", query->type);
@@ -626,7 +627,7 @@ static LinphoneCardDavQuery* linphone_carddav_create_addressbook_query(LinphoneC
 	query->context = cdc;
 	query->depth = "1";
 	query->ifmatch = NULL;
-	query->body = "<card:addressbook-query xmlns:d=\"DAV:\" xmlns:card=\"urn:ietf:params:xml:ns:carddav\"><d:prop><d:getetag /></d:prop></card:addressbook-query>";
+	query->body = "<card:addressbook-query xmlns:d=\"DAV:\" xmlns:card=\"urn:ietf:params:xml:ns:carddav\"><d:prop><d:getetag /></d:prop><card:filter></card:filter></card:addressbook-query>";
 	query->method = "REPORT";
 	query->url = cdc->friend_list->uri;
 	query->type = LinphoneCardDavQueryTypeAddressbookQuery;
