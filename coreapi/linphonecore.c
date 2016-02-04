@@ -1528,7 +1528,7 @@ static void misc_config_read(LinphoneCore *lc) {
 }
 
 static void linphone_core_start(LinphoneCore * lc) {
-	sip_setup_register_all();
+	sip_setup_register_all(lc->factory);
 	sound_config_read(lc);
 	net_config_read(lc);
 	rtp_config_read(lc);
