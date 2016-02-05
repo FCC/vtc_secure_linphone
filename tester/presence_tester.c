@@ -906,13 +906,8 @@ static void test_presence_list_subscribe_with_error(bool_t io_error) {
 	linphone_core_add_friend_list(laure->lc, lfl);
 	linphone_friend_list_unref(lfl);
 	linphone_core_set_presence_model(laure->lc, linphone_core_create_presence_model_with_activity(laure->lc, LinphonePresenceActivityOnline, NULL));
-<<<<<<< HEAD
 	linphone_friend_list_update_subscriptions(linphone_core_get_default_friend_list(laure->lc), NULL, FALSE);
 	
-=======
-	linphone_friend_list_update_subscriptions(laure->lc->friendlist, NULL, FALSE);
-
->>>>>>> d61fe35f48364cd7964542dc74ea4950b93edf51
 	lcs = ms_list_append(lcs, laure->lc);
 	lcs = ms_list_append(lcs, pauline->lc);
 
@@ -952,7 +947,7 @@ static void test_presence_list_subscribe_with_error(bool_t io_error) {
 
 
 	BC_ASSERT_TRUE(wait_for_until(laure->lc, pauline->lc, &laure->stat.number_of_LinphonePresenceActivityAway, 1, 6000));
-	lf = linphone_friend_list_find_friend_by_uri(laure->lc->friendlist, pauline_identity);
+	lf = linphone_friend_list_find_friend_by_uri(linphone_core_get_default_friend_list(laure->lc), pauline_identity);
 	BC_ASSERT_EQUAL(linphone_friend_get_status(lf), LinphoneStatusAway, int, "%d");
 
 	linphone_core_manager_destroy(laure);
