@@ -959,10 +959,10 @@ class LinphoneCoreImpl implements LinphoneCore {
 		setUserAgent(nativePtr,name,version);
 	}
 
-	private native void setCpuCountNative(int count);
+	private native void setCpuCountNative(long nativePtr, int count);
 	public synchronized void setCpuCount(int count)
 	{
-		setCpuCountNative(count);
+		setCpuCountNative(nativePtr, count);
 	}
 
 	public synchronized int getMissedCallsCount() {
@@ -1654,5 +1654,11 @@ class LinphoneCoreImpl implements LinphoneCore {
 	@Override
 	public void setMediaNetworkReachable(boolean isReachable) {
 		setMediaNetworkReachable(nativePtr, isReachable);
+	}
+
+	private native Object getMSFactory(long nativePtr);
+	@Override
+	public org.linphone.mediastream.Factory getMSFactory(){
+		return (org.linphone.mediastream.Factory) getMSFactory(nativePtr);
 	}
 }
