@@ -39,7 +39,7 @@ static char *create_filepath(const char *dir, const char *filename, const char *
 // prototype definition for call_recording()
 #ifdef ANDROID
 #ifdef HAVE_OPENH264
-extern void libmsopenh264_init(void);
+extern void libmsopenh264_init(MSFactory *factory);
 #endif
 #endif
 
@@ -1140,6 +1140,10 @@ static void check_nb_media_starts(LinphoneCoreManager *caller, LinphoneCoreManag
 }
 
 static void _call_with_ice_base(LinphoneCoreManager* pauline,LinphoneCoreManager* marie, bool_t caller_with_ice, bool_t callee_with_ice, bool_t random_ports, bool_t forced_relay) {
+	// Force STUN server resolution to prevent DNS resolution issues on some machines
+	linphone_core_get_stun_server_addrinfo(pauline->lc);
+	linphone_core_get_stun_server_addrinfo(marie->lc);
+
 	linphone_core_set_user_agent(pauline->lc, "Natted Linphone", NULL);
 	linphone_core_set_user_agent(marie->lc, "Natted Linphone", NULL);
 
@@ -3624,12 +3628,12 @@ static void call_redirect(void){
 		/* pauline should have ended the call */
 		BC_ASSERT_TRUE(wait_for_list(lcs, &pauline->stat.number_of_LinphoneCallEnd,1,1000));
 		/* the call should still be ringing on marie's side */
-		BC_ASSERT_TRUE(wait_for_list(lcs, &marie->stat.number_of_LinphoneCallOutgoingRinging, 1,1000));
+		BC_ASSERT_EQUAL(marie->stat.number_of_LinphoneCallOutgoingRinging, 1, int, "%i");
 
 		linphone_core_accept_call(laure->lc, linphone_core_get_current_call(laure->lc));
 
-		BC_ASSERT_TRUE(wait_for_list(lcs, &marie->stat.number_of_LinphoneCallStreamsRunning, 1,1000));
-		BC_ASSERT_TRUE(wait_for_list(lcs, &laure->stat.number_of_LinphoneCallStreamsRunning, 1,1000));
+		BC_ASSERT_TRUE(wait_for_list(lcs, &marie->stat.number_of_LinphoneCallStreamsRunning, 1,5000));
+		BC_ASSERT_TRUE(wait_for_list(lcs, &laure->stat.number_of_LinphoneCallStreamsRunning, 1,5000));
 
 		BC_ASSERT_PTR_EQUAL(marie_call, linphone_core_get_current_call(marie->lc));
 
@@ -4018,14 +4022,15 @@ static void record_call(const char *filename, bool_t enableVideo, const char *vi
 	int dummy=0, i;
 	bool_t call_succeeded = FALSE;
 
-#if defined(HAVE_OPENH264) && defined(ANDROID)
-	ms_init();
-	libmsopenh264_init();
-#endif
-
-
 	marie = linphone_core_manager_new("marie_h264_rc");
 	pauline = linphone_core_manager_new("pauline_h264_rc");
+	
+#if defined(HAVE_OPENH264) && defined(ANDROID)
+	libmsopenh264_init(linphone_core_get_ms_factory(marie->lc));
+	linphone_core_reload_ms_plugins(marie->lc, NULL);
+	libmsopenh264_init(linphone_core_get_ms_factory(pauline->lc));
+	linphone_core_reload_ms_plugins(pauline->lc, NULL);
+#endif
 	marieParams = linphone_core_create_call_params(marie->lc, NULL);
 	paulineParams = linphone_core_create_call_params(pauline->lc, NULL);
 
@@ -4067,9 +4072,6 @@ static void record_call(const char *filename, bool_t enableVideo, const char *vi
 	linphone_call_params_destroy(marieParams);
 	linphone_core_manager_destroy(marie);
 	linphone_core_manager_destroy(pauline);
-#if defined(HAVE_OPENH264) && defined(ANDROID)
-	ms_exit();
-#endif
 }
 
 static void audio_call_recording_test(void) {
