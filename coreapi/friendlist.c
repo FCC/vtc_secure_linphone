@@ -451,11 +451,13 @@ static LinphoneFriendListStatus _linphone_friend_list_remove_friend(LinphoneFrie
 		LinphoneVCard *lvc = linphone_friend_get_vcard(lf);
 		if (lvc && linphone_vcard_get_uid(lvc)) {
 			LinphoneCardDavContext *cdc = linphone_carddav_context_new(list);
-			cdc->sync_done_cb = carddav_done;
-			if (cdc->friend_list->cbs->sync_state_changed_cb) {
-				cdc->friend_list->cbs->sync_state_changed_cb(cdc->friend_list, LinphoneFriendListSyncStarted, NULL);
+			if (cdc) {
+				cdc->sync_done_cb = carddav_done;
+				if (cdc->friend_list->cbs->sync_state_changed_cb) {
+					cdc->friend_list->cbs->sync_state_changed_cb(cdc->friend_list, LinphoneFriendListSyncStarted, NULL);
+				}
+				linphone_carddav_delete_vcard(cdc, lf);
 			}
-			linphone_carddav_delete_vcard(cdc, lf);
 		}
 	}
 	
@@ -518,14 +520,14 @@ static void carddav_updated(LinphoneCardDavContext *cdc, LinphoneFriend *lf_new,
 		LinphoneFriendList *lfl = cdc->friend_list;
 		MSList *elem = ms_list_find(lfl->friends, lf_old);
 		if (elem) {
-			lf_old->friend_list = NULL;
-			linphone_friend_unref(lf_old);
-			lfl->friends = ms_list_remove_link(lfl->friends, elem);
+			elem->data = linphone_friend_ref(lf_new);
 		}
-		linphone_friend_list_import_friend(lfl, lf_new, FALSE);
+		linphone_core_store_friend_in_db(lf_new->lc, lf_new);
+		
 		if (cdc->friend_list->cbs->contact_updated_cb) {
 			cdc->friend_list->cbs->contact_updated_cb(lfl, lf_new, lf_old);
 		}
+		linphone_friend_unref(lf_old);
 	}
 }
 
@@ -730,4 +732,104 @@ void linphone_friend_list_subscription_state_changed(LinphoneCore *lc, LinphoneE
 
 LinphoneCore* linphone_friend_list_get_core(LinphoneFriendList *list) {
 	return list->lc;
+}
+
+int linphone_friend_list_import_friends_from_vcard4_file(LinphoneFriendList *list, const char *vcard_file) {
+	MSList *vcards = linphone_vcard_list_from_vcard4_file(vcard_file);
+	int count = 0;
+	
+#ifndef VCARD_ENABLED
+	ms_error("vCard support wasn't enabled at compilation time");
+	return -1;
+#endif
+	if (!vcards) {
+		ms_error("Failed to parse the file %s", vcard_file);
+		return -1;
+	}
+	if (!list) {
+		ms_error("Can't import into a NULL list");
+		return -1;
+	}
+	
+	while (vcards != NULL && vcards->data != NULL) {
+		LinphoneVCard *vcard = (LinphoneVCard *)vcards->data;
+		LinphoneFriend *lf = linphone_friend_new_from_vcard(vcard);
+		if (lf) {
+			if (LinphoneFriendListOK == linphone_friend_list_import_friend(list, lf, TRUE)) {
+				count++;
+			}
+			linphone_friend_unref(lf);
+		} else {
+			linphone_vcard_free(vcard);
+		}
+		vcards = ms_list_next(vcards);
+	}
+#ifndef FRIENDS_SQL_STORAGE_ENABLED
+	linphone_core_write_friends_config(list->lc);
+#endif
+	return count;
+}
+
+int linphone_friend_list_import_friends_from_vcard4_buffer(LinphoneFriendList *list, const char *vcard_buffer) {
+	MSList *vcards = linphone_vcard_list_from_vcard4_buffer(vcard_buffer);
+	int count = 0;
+	
+#ifndef VCARD_ENABLED
+	ms_error("vCard support wasn't enabled at compilation time");
+	return -1;
+#endif
+	if (!vcards) {
+		ms_error("Failed to parse the buffer");
+		return -1;
+	}
+	if (!list) {
+		ms_error("Can't import into a NULL list");
+		return -1;
+	}
+	
+	while (vcards != NULL && vcards->data != NULL) {
+		LinphoneVCard *vcard = (LinphoneVCard *)vcards->data;
+		LinphoneFriend *lf = linphone_friend_new_from_vcard(vcard);
+		if (lf) {
+			if (LinphoneFriendListOK == linphone_friend_list_import_friend(list, lf, TRUE)) {
+				count++;
+			}
+			linphone_friend_unref(lf);
+		} else {
+			linphone_vcard_free(vcard);
+		}
+		vcards = ms_list_next(vcards);
+	}
+#ifndef FRIENDS_SQL_STORAGE_ENABLED
+	linphone_core_write_friends_config(list->lc);
+#endif
+	return count;
+}
+
+void linphone_friend_list_export_friends_as_vcard4_file(LinphoneFriendList *list, const char *vcard_file) {
+	FILE *file = NULL;
+	const MSList *friends = linphone_friend_list_get_friends(list);
+	
+	file = fopen(vcard_file, "w");
+	if (file == NULL) {
+		ms_warning("Could not write %s ! Maybe it is read-only. Contacts will not be saved.", vcard_file);
+		return;
+	}
+	
+#ifndef VCARD_ENABLED
+	ms_error("vCard support wasn't enabled at compilation time");
+#endif
+	while (friends != NULL && friends->data != NULL) {
+		LinphoneFriend *lf = (LinphoneFriend *)friends->data;
+		LinphoneVCard *vcard = linphone_friend_get_vcard(lf);
+		if (vcard) {
+			const char *vcard_text = linphone_vcard_as_vcard4_string(vcard);
+			fprintf(file, "%s", vcard_text);
+		} else {
+			ms_warning("Couldn't export friend %s because it doesn't have a vCard attached", linphone_address_as_string(linphone_friend_get_address(lf)));
+		}
+		friends = ms_list_next(friends);
+	}
+	
+	fclose(file);
 }
