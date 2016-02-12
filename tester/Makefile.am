@@ -68,11 +68,13 @@ RCFILES = \
 					rcfiles/remote_zero_length_params_rc\
 					rcfiles/stun_rc\
 					rcfiles/upnp_rc\
-					rcfiles/zero_length_params_rc
+					rcfiles/zero_length_params_rc\
+					rcfiles/friends_rc\
+					rcfiles/carddav_rc
 
 IMAGE_FILES = images/nowebcamCIF.jpg
 
-COMMON_FILE = common/bc_completion
+COMMON_FILE = common/bc_completion common/vcards.vcf common/thousand_vcards.vcf
 
 EXTRA_DIST = tester_hosts\
 			messages.db\
@@ -135,6 +137,7 @@ liblinphonetester_la_SOURCES = \
 				tester.c \
 				upnp_tester.c \
 				video_tester.c \
+				vcard_tester.c \
 				common/bc_tester_utils.c
 
 liblinphonetester_ladir = $(includedir)/linphone
@@ -152,7 +155,7 @@ dist_liblinphone_tester_DATA =  tester_hosts messages.db
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/coreapi -I$(top_srcdir)/tester/common
 AM_CFLAGS    = -DBC_CONFIG_FILE=\"config.h\" $(STRICT_OPTIONS) $(STRICT_OPTIONS_CC) \
 		-DIN_LINPHONE $(ORTP_CFLAGS) $(MEDIASTREAMER_CFLAGS) $(CUNIT_CFLAGS) \
-		$(BELLESIP_CFLAGS) $(LIBXML2_CFLAGS) $(SQLITE3_CFLAGS)
+		$(BELLESIP_CFLAGS) $(LIBXML2_CFLAGS) $(SQLITE3_CFLAGS) $(BELCARD_CFLAGS)
 
 if BUILD_GTK_UI
 
