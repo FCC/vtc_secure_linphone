@@ -79,10 +79,19 @@ static void linphone_interpret_url_test(void)
 	LinphoneCore* lc;
 	const char* sips_address = "sips:margaux@sip.linphone.org";
 	LinphoneAddress* address;
-
+	LinphoneProxyConfig *proxy_config;
+	char *tmp;
 	memset ( &v_table,0,sizeof ( v_table ) );
 	lc = linphone_core_new ( &v_table,NULL,NULL,NULL );
 	BC_ASSERT_PTR_NOT_NULL_FATAL ( lc );
+	
+	proxy_config =linphone_core_create_proxy_config(lc);
+	linphone_proxy_config_set_identity(proxy_config, "sip:moi@sip.linphone.org");
+	linphone_proxy_config_enable_register(proxy_config, FALSE);
+	linphone_proxy_config_set_server_addr(proxy_config,"sip:sip.linphone.org");
+	linphone_core_add_proxy_config(lc, proxy_config);
+	linphone_core_set_default_proxy_config(lc,proxy_config);
+	
 
 	address = linphone_core_interpret_url(lc, sips_address);
 
@@ -93,6 +102,33 @@ static void linphone_interpret_url_test(void)
 
 	linphone_address_destroy(address);
 
+	address = linphone_core_interpret_url(lc,"23");
+	
+	BC_ASSERT_PTR_NOT_NULL(address);
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "23");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_domain(address), "sip.linphone.org");
+	linphone_address_destroy(address);
+
+	address = linphone_core_interpret_url(lc,"#24");
+	
+	BC_ASSERT_PTR_NOT_NULL(address);
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "#24");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_domain(address), "sip.linphone.org");
+	tmp = linphone_address_as_string(address);
+	BC_ASSERT_TRUE(strcmp (tmp,"sip:%2324@sip.linphone.org") == 0);
+	linphone_address_destroy(address);
+
+	address = linphone_core_interpret_url(lc,tmp);
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "#24");
+	BC_ASSERT_STRING_EQUAL(linphone_address_get_domain(address), "sip.linphone.org");
+
+	linphone_address_destroy(address);
+	ms_free(tmp);
+
+	
 	linphone_core_destroy ( lc );
 }
 
@@ -294,20 +330,20 @@ end:
 }
 
 test_t setup_tests[] = {
-	{ "Version check", linphone_version_test },
-	{ "Linphone Address", linphone_address_test },
-	{ "Linphone proxy config address equal (internal api)", linphone_proxy_config_address_equal_test},
-	{ "Linphone proxy config server address change (internal api)", linphone_proxy_config_is_server_config_changed_test},
-	{ "Linphone core init/uninit", core_init_test },
-	{ "Linphone random transport port",core_sip_transport_test},
-	{ "Linphone interpret url", linphone_interpret_url_test },
-	{ "LPConfig from buffer", linphone_lpconfig_from_buffer },
-	{ "LPConfig zero_len value from buffer", linphone_lpconfig_from_buffer_zerolen_value },
-	{ "LPConfig zero_len value from file", linphone_lpconfig_from_file_zerolen_value },
-	{ "LPConfig zero_len value from XML", linphone_lpconfig_from_xml_zerolen_value },
-	{ "Chat room", chat_room_test },
-	{ "Devices reload", devices_reload_test },
-	{ "Codec usability", codec_usability_test }
+	TEST_NO_TAG("Version check", linphone_version_test),
+	TEST_NO_TAG("Linphone Address", linphone_address_test),
+	TEST_NO_TAG("Linphone proxy config address equal (internal api)", linphone_proxy_config_address_equal_test),
+	TEST_NO_TAG("Linphone proxy config server address change (internal api)", linphone_proxy_config_is_server_config_changed_test),
+	TEST_NO_TAG("Linphone core init/uninit", core_init_test),
+	TEST_NO_TAG("Linphone random transport port",core_sip_transport_test),
+	TEST_NO_TAG("Linphone interpret url", linphone_interpret_url_test),
+	TEST_NO_TAG("LPConfig from buffer", linphone_lpconfig_from_buffer),
+	TEST_NO_TAG("LPConfig zero_len value from buffer", linphone_lpconfig_from_buffer_zerolen_value),
+	TEST_NO_TAG("LPConfig zero_len value from file", linphone_lpconfig_from_file_zerolen_value),
+	TEST_NO_TAG("LPConfig zero_len value from XML", linphone_lpconfig_from_xml_zerolen_value),
+	TEST_NO_TAG("Chat room", chat_room_test),
+	TEST_NO_TAG("Devices reload", devices_reload_test),
+	TEST_NO_TAG("Codec usability", codec_usability_test)
 };
 
 test_suite_t setup_test_suite = {"Setup", NULL, NULL, liblinphone_tester_before_each, liblinphone_tester_after_each,

@@ -24,18 +24,17 @@
 
 #ifndef _PRIVATE_H
 #define _PRIVATE_H
-#ifdef __cplusplus
 
-extern "C" {
-#endif
 #include "linphonecore.h"
 #include "linphonefriend.h"
 #include "friendlist.h"
 #include "linphone_tunnel.h"
 #include "linphonecore_utils.h"
+#include "conference.h"
 #include "sal/sal.h"
 #include "sipsetup.h"
 #include "quality_reporting.h"
+#include "ringtoneplayer.h"
 
 #include <belle-sip/object.h>
 #include <belle-sip/dict.h>
@@ -111,6 +110,20 @@ extern "C" {
 #endif
 #endif
 #endif
+#ifdef _MSC_VER
+#if (_MSC_VER >= 1900)
+#define LINPHONE_MSC_VER_GREATER_19
+#endif
+#endif
+
+#include <libxml/xmlreader.h>
+#include <libxml/xmlwriter.h>
+#include <libxml/xpath.h>
+#include <libxml/xpathInternals.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct _LinphoneCallParams{
 	belle_sip_object_t base;
@@ -139,18 +152,21 @@ struct _LinphoneCallParams{
 	bool_t has_audio;
 	bool_t has_video;
 	bool_t avpf_enabled; /* RTCP feedback messages are enabled */
-    bool_t implicit_rtcp_fb;
+	bool_t implicit_rtcp_fb;
+	
 	bool_t real_early_media; /*send real media even during early media (for outgoing calls)*/
 	bool_t in_conference; /*in conference mode */
-
 	bool_t low_bandwidth;
 	bool_t no_user_consent;/*when set to TRUE an UPDATE request will be used instead of reINVITE*/
+	
 	uint16_t avpf_rr_interval; /*in milliseconds*/
-
 	bool_t internal_call_update; /*use mark that call update was requested internally (might be by ice) - unused for the moment*/
 	bool_t video_multicast_enabled;
+	
 	bool_t audio_multicast_enabled;
 	bool_t realtimetext_enabled;
+	bool_t update_call_when_ice_completed;
+	bool_t encryption_mandatory;
 };
 
 BELLE_SIP_DECLARE_VPTR(LinphoneCallParams);
@@ -181,6 +197,7 @@ struct _LinphoneCallLog{
 	char* call_id; /**unique id of a call*/
 	struct _LinphoneQualityReporting reporting;
 	bool_t video_enabled;
+	bool_t was_conference; /**<That call was a call with a conference server */
 	unsigned int storage_id;
 };
 
@@ -339,6 +356,8 @@ struct _LinphoneCall{
 
 	bool_t paused_by_app;
 	bool_t broken; /*set to TRUE when the call is in broken state due to network disconnection or transport */
+	
+	LinphoneConference *conf_ref; /**> Point on the associated conference if this call is part of a conference. NULL instead. */
 };
 
 BELLE_SIP_DECLARE_VPTR(LinphoneCall);
@@ -379,6 +398,8 @@ void linphone_proxy_config_set_state(LinphoneProxyConfig *cfg, LinphoneRegistrat
 void linphone_proxy_config_stop_refreshing(LinphoneProxyConfig *obj);
 void linphone_proxy_config_write_all_to_config_file(LinphoneCore *lc);
 void _linphone_proxy_config_release(LinphoneProxyConfig *cfg);
+void _linphone_proxy_config_unpublish(LinphoneProxyConfig *obj);
+	
 /*
  * returns service route as defined in as defined by rfc3608, might be a list instead of just one.
  * Can be NULL
@@ -387,8 +408,11 @@ const LinphoneAddress* linphone_proxy_config_get_service_route(const LinphonePro
 
 void linphone_friend_list_invalidate_subscriptions(LinphoneFriendList *list);
 void linphone_friend_list_notify_presence_received(LinphoneFriendList *list, LinphoneEvent *lev, const LinphoneContent *body);
+void linphone_friend_list_subscription_state_changed(LinphoneCore *lc, LinphoneEvent *lev, LinphoneSubscriptionState state);
+void _linphone_friend_list_release(LinphoneFriendList *list);
 void linphone_friend_invalidate_subscription(LinphoneFriend *lf);
 void linphone_friend_close_subscriptions(LinphoneFriend *lf);
+void _linphone_friend_release(LinphoneFriend *lf);
 void linphone_friend_update_subscribes(LinphoneFriend *fr, LinphoneProxyConfig *cfg, bool_t only_when_registered);
 void linphone_friend_notify(LinphoneFriend *lf, LinphonePresenceModel *presence);
 void linphone_friend_add_incoming_subscription(LinphoneFriend *lf, SalOp *op);
@@ -462,12 +486,13 @@ void linphone_core_resolve_stun_server(LinphoneCore *lc);
 LINPHONE_PUBLIC const struct addrinfo *linphone_core_get_stun_server_addrinfo(LinphoneCore *lc);
 void linphone_core_adapt_to_network(LinphoneCore *lc, int ping_time_ms, LinphoneCallParams *params);
 int linphone_core_gather_ice_candidates(LinphoneCore *lc, LinphoneCall *call);
+LINPHONE_PUBLIC void linphone_core_enable_forced_ice_relay(LinphoneCore *lc, bool_t enable);
 void linphone_core_update_ice_state_in_call_stats(LinphoneCall *call);
 void linphone_call_stats_fill(LinphoneCallStats *stats, MediaStream *ms, OrtpEvent *ev);
 void linphone_call_stop_ice_for_inactive_streams(LinphoneCall *call, SalMediaDescription *result);
-void _update_local_media_description_from_ice(SalMediaDescription *desc, IceSession *session);
+void _update_local_media_description_from_ice(SalMediaDescription *desc, IceSession *session, bool_t use_nortpproxy);
 void linphone_call_update_local_media_description_from_ice_or_upnp(LinphoneCall *call);
-void linphone_call_update_ice_from_remote_media_description(LinphoneCall *call, const SalMediaDescription *md);
+void linphone_call_update_ice_from_remote_media_description(LinphoneCall *call, const SalMediaDescription *md, bool_t is_offer);
 void linphone_call_clear_unused_ice_candidates(LinphoneCall *call, const SalMediaDescription *md);
 bool_t linphone_core_media_description_contains_video_stream(const SalMediaDescription *md);
 
@@ -521,7 +546,7 @@ int linphone_core_start_accept_call_update(LinphoneCore *lc, LinphoneCall *call,
 void linphone_core_notify_incoming_call(LinphoneCore *lc, LinphoneCall *call);
 bool_t linphone_core_incompatible_security(LinphoneCore *lc, SalMediaDescription *md);
 extern SalCallbacks linphone_sal_callbacks;
-bool_t linphone_core_rtcp_enabled(const LinphoneCore *lc);
+LINPHONE_PUBLIC bool_t linphone_core_rtcp_enabled(const LinphoneCore *lc);
 bool_t linphone_core_symmetric_rtp_enabled(LinphoneCore*lc);
 
 void linphone_core_queue_task(LinphoneCore *lc, belle_sip_source_func_t task_fun, void *data, const char *task_description);
@@ -573,7 +598,6 @@ struct _LinphoneProxyConfig
 	int auth_failures;
 	char *dial_prefix;
 	LinphoneRegistrationState state;
-	SalOp *publish_op;
 	LinphoneAVPFMode avpf_mode;
 
 	bool_t commit;
@@ -593,6 +617,8 @@ struct _LinphoneProxyConfig
 	LinphoneAddress *saved_identity;
 	/*---*/
 	LinphoneAddress *pending_contact; /*use to store previous contact in case of network failure*/
+	LinphoneEvent *long_term_event;
+	unsigned long long previous_publish_config_hash[2];
 
 };
 
@@ -671,6 +697,7 @@ struct _LinphoneFriendList {
 	char *display_name;
 	char *rls_uri;
 	MSList *friends;
+	unsigned char *content_digest;
 	int expected_notification_version;
 };
 
@@ -812,16 +839,6 @@ typedef struct autoreplier_config
 	const char *message;		/* the path of the file to be played */
 }autoreplier_config_t;
 
-struct _LinphoneConference{
-	MSAudioConference *conf;
-	AudioStream *local_participant;
-	MSAudioEndpoint *local_endpoint;
-	MSAudioEndpoint *record_endpoint;
-	RtpProfile *local_dummy_profile;
-	bool_t local_muted;
-	bool_t terminated;
-};
-
 
 typedef struct _LinphoneToneDescription{
 	LinphoneReason reason;
@@ -836,7 +853,6 @@ void linphone_core_play_call_error_tone(LinphoneCore *lc, LinphoneReason reason)
 void _linphone_core_set_tone(LinphoneCore *lc, LinphoneReason reason, LinphoneToneID id, const char *audiofile);
 const char *linphone_core_get_tone_file(const LinphoneCore *lc, LinphoneToneID id);
 int _linphone_core_accept_call_update(LinphoneCore *lc, LinphoneCall *call, const LinphoneCallParams *params, LinphoneCallState next_state, const char *state_info);
-typedef struct _LinphoneConference LinphoneConference;
 
 typedef struct _LinphoneTaskList{
 	MSList *hooks;
@@ -850,6 +866,7 @@ void linphone_task_list_free(LinphoneTaskList *t);
 
 struct _LinphoneCore
 {
+	MSFactory* factory;
 	MSList* vtable_refs;
 	Sal *sal;
 	LinphoneGlobalState state;
@@ -898,7 +915,7 @@ struct _LinphoneCore
 	time_t netup_time; /*time when network went reachable */
 	struct _EcCalibrator *ecc;
 	LinphoneTaskList hooks; /*tasks periodically executed in linphone_core_iterate()*/
-	LinphoneConference conf_ctx;
+	LinphoneConference *conf_ctx;
 	char* zrtp_secrets_cache;
 	char* user_certificates_path;
 	LinphoneVideoPolicy video_policy;
@@ -911,13 +928,18 @@ struct _LinphoneCore
 
 	bool_t preview_finished;
 	bool_t auto_net_state_mon;
-	bool_t network_reachable;
+	bool_t sip_network_reachable;
+	bool_t media_network_reachable;
+	
 	bool_t network_reachable_to_be_notified; /*set to true when state must be notified in next iterate*/
-
 	bool_t use_preview_window;
 	bool_t network_last_status;
 	bool_t ringstream_autorelease;
+	
 	bool_t vtables_running;
+	bool_t send_call_stats_periodical_updates;
+	bool_t forced_ice_relay;
+	bool_t pad;
 	char localip[LINPHONE_IPADDR_SIZE];
 	int device_rotation;
 	int max_calls;
@@ -945,6 +967,7 @@ struct _LinphoneCore
 	const char **supported_formats;
 	LinphoneContent *log_collection_upload_information;
 	LinphoneCoreVTable *current_vtable; // the latest vtable to call a callback, see linphone_core_get_current_vtable
+	LinphoneRingtonePlayer *ringtoneplayer;
 #ifdef ANDROID
 	jobject wifi_lock;
 	jclass wifi_lock_class;
@@ -959,6 +982,7 @@ struct _LinphoneCore
 
 
 struct _LinphoneEvent{
+	belle_sip_object_t base;
 	LinphoneSubscriptionDir dir;
 	LinphoneCore *lc;
 	SalOp *op;
@@ -966,13 +990,14 @@ struct _LinphoneEvent{
 	LinphoneSubscriptionState subscription_state;
 	LinphonePublishState publish_state;
 	void *userdata;
-	int refcnt;
 	char *name;
 	int expires;
 	bool_t terminating;
 	bool_t is_out_of_dialog_op; /*used for out of dialog notify*/
+	bool_t internal;
 };
 
+BELLE_SIP_DECLARE_VPTR(LinphoneEvent);
 
 LinphoneTunnel *linphone_core_tunnel_new(LinphoneCore *lc);
 void linphone_tunnel_destroy(LinphoneTunnel *tunnel);
@@ -998,6 +1023,7 @@ bool_t linphone_core_is_payload_type_usable_for_bandwidth(LinphoneCore *lc, cons
 void _linphone_core_configure_resolver(void);
 
 struct _EcCalibrator{
+	MSFactory *factory;
 	ms_thread_t thread;
 	MSSndCard *play_card,*capt_card;
 	MSFilter *sndread,*det,*rec;
@@ -1025,18 +1051,12 @@ void ec_calibrator_destroy(EcCalibrator *ecc);
 void linphone_call_background_tasks(LinphoneCall *call, bool_t one_second_elapsed);
 void linphone_call_set_broken(LinphoneCall *call);
 void linphone_call_repair_if_broken(LinphoneCall *call);
+void linphone_core_repair_calls(LinphoneCore *lc);
 void linphone_core_preempt_sound_resources(LinphoneCore *lc);
 int _linphone_core_pause_call(LinphoneCore *lc, LinphoneCall *call);
 
 /*conferencing subsystem*/
 void _post_configure_audio_stream(AudioStream *st, LinphoneCore *lc, bool_t muted);
-/* When a conference participant pause the conference he may send a music.
- * We don't want to hear that music or to send it to the other participants.
- * Use muted=yes to handle this case.
- */
-void linphone_call_add_to_conf(LinphoneCall *call, bool_t muted);
-void linphone_call_remove_from_conf(LinphoneCall *call);
-void linphone_core_conference_check_uninit(LinphoneCore *lc);
 bool_t linphone_core_sound_resources_available(LinphoneCore *lc);
 void linphone_core_notify_refer_state(LinphoneCore *lc, LinphoneCall *referer, LinphoneCall *newcall);
 unsigned int linphone_core_get_audio_features(LinphoneCore *lc);
@@ -1094,10 +1114,13 @@ SalReason linphone_reason_to_sal(LinphoneReason reason);
 LinphoneReason linphone_reason_from_sal(SalReason reason);
 LinphoneEvent *linphone_event_new(LinphoneCore *lc, LinphoneSubscriptionDir dir, const char *name, int expires);
 LinphoneEvent *linphone_event_new_with_op(LinphoneCore *lc, SalOp *op, LinphoneSubscriptionDir dir, const char *name);
+void linphone_event_unpublish(LinphoneEvent *lev);
 /**
  * Useful for out of dialog notify
  * */
 LinphoneEvent *linphone_event_new_with_out_of_dialog_op(LinphoneCore *lc, SalOp *op, LinphoneSubscriptionDir dir, const char *name);
+void linphone_event_set_internal(LinphoneEvent *lev, bool_t internal);
+bool_t linphone_event_is_internal(LinphoneEvent *lev);
 void linphone_event_set_state(LinphoneEvent *lev, LinphoneSubscriptionState state);
 void linphone_event_set_publish_state(LinphoneEvent *lev, LinphonePublishState state);
 LinphoneSubscriptionState linphone_subscription_state_from_sal(SalSubscribeStatus ss);
@@ -1240,11 +1263,6 @@ void _linphone_player_destroy(LinphonePlayer *player);
  * XML UTILITY FUNCTIONS                                                     *
  ****************************************************************************/
 
-#include <libxml/xmlreader.h>
-#include <libxml/xmlwriter.h>
-#include <libxml/xpath.h>
-#include <libxml/xpathInternals.h>
-
 #define XMLPARSING_BUFFER_LEN 2048
 #define MAX_XPATH_LENGTH 256
 
@@ -1318,7 +1336,8 @@ BELLE_SIP_TYPE_ID(LinphoneFriendList),
 BELLE_SIP_TYPE_ID(LinphoneXmlRpcRequest),
 BELLE_SIP_TYPE_ID(LinphoneXmlRpcRequestCbs),
 BELLE_SIP_TYPE_ID(LinphoneXmlRpcSession),
-BELLE_SIP_TYPE_ID(LinphoneTunnelConfig)
+BELLE_SIP_TYPE_ID(LinphoneTunnelConfig),
+BELLE_SIP_TYPE_ID(LinphoneEvent)
 BELLE_SIP_DECLARE_TYPES_END
 
 
@@ -1408,22 +1427,26 @@ struct _VTableReference{
 	LinphoneCoreVTable *vtable;
 	bool_t valid;
 	bool_t autorelease;
+	bool_t internal;
 };
 
 typedef struct _VTableReference  VTableReference;
 
 void v_table_reference_destroy(VTableReference *ref);
 
-void _linphone_core_add_listener(LinphoneCore *lc, LinphoneCoreVTable *vtable, bool_t autorelease);
+LINPHONE_PUBLIC void _linphone_core_add_listener(LinphoneCore *lc, LinphoneCoreVTable *vtable, bool_t autorelease, bool_t internal);
+
 #ifdef VIDEO_ENABLED
 LINPHONE_PUBLIC MSWebCam *linphone_call_get_video_device(const LinphoneCall *call);
-MSWebCam *get_nowebcam_device(void);
+MSWebCam *get_nowebcam_device(MSFactory *f);
 #endif
 bool_t linphone_core_lime_for_file_sharing_enabled(const LinphoneCore *lc);
 
 BELLE_SIP_DECLARE_VPTR(LinphoneTunnelConfig);
 
 int linphone_core_get_default_proxy_config_index(LinphoneCore *lc);
+
+char *linphone_presence_model_to_xml(LinphonePresenceModel *model) ;
 	
 #ifdef __cplusplus
 }

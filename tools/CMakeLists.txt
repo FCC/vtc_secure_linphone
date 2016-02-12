@@ -54,3 +54,47 @@ install(TARGETS lp-gen-wrappers
 	ARCHIVE DESTINATION lib
 	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
 )
+
+set(LP_AUTO_ANSWER_SOURCE_FILES
+	auto_answer.c
+)
+
+add_definitions(
+	-DIN_LINPHONE
+)
+
+apply_compile_flags(LP_AUTO_ANSWER_SOURCE_FILES "CPP" "C")
+add_executable(lp-auto-answer ${LP_AUTO_ANSWER_SOURCE_FILES})
+target_link_libraries(lp-auto-answer linphone)
+
+
+install(TARGETS lp-auto-answer
+	RUNTIME DESTINATION bin
+	LIBRARY DESTINATION lib
+	ARCHIVE DESTINATION lib
+	PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+
+set(LP_SENDMSG_SOURCE_FILES
+        lpsendmsg.c
+)
+
+add_definitions(
+        -DIN_LINPHONE
+)
+
+apply_compile_flags(LP_SENDMSG_SOURCE_FILES "CPP" "C")
+add_executable(lp-sendmsg ${LP_SENDMSG_SOURCE_FILES})
+target_link_libraries(lp-sendmsg linphone)
+
+
+install(TARGETS lp-sendmsg
+        RUNTIME DESTINATION bin
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+)
+
+
+
+

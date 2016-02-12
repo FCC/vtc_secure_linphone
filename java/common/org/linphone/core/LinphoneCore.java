@@ -1349,6 +1349,19 @@ public interface LinphoneCore {
 	void enableEchoLimiter(boolean val);
 
 	/**
+	 * Create a conference
+	 * @param params Parameters of the conference. Can be null
+	 * @return The new conference or null if the creation has failed
+	 */
+	LinphoneConference createConference(LinphoneConferenceParams params);
+	/**
+	 * Return the value of the C pointer on the conference instance.
+	 *
+	 * That function can be used to test whether a conference is running.
+	 * @return A positive value if a conference is running, 0 if not.
+	 **/
+	LinphoneConference getConference();
+	/**
 	 * Indicates whether the local user is part of the conference.
 	**/
 	boolean isInConference();
@@ -1368,7 +1381,6 @@ public interface LinphoneCore {
 	 * When the local participant is out of the conference, the remote participants can continue to talk normally.
 	**/
 	void leaveConference();
-
 	/**
 	 * Merge a call into a conference.
 	 *
@@ -2241,4 +2253,35 @@ public interface LinphoneCore {
 	 */
 	public int getNortpTimeout();
 
+	/**
+	 * This method is called by the application to notify the linphone core library when the SIP network is reachable.
+	 * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+	 * Most applications just need LinphoneCore.setNetworkReachable().
+	 * @param isReachable whether SIP network is reachable.
+	 */
+	public void setSipNetworkReachable(boolean isReachable);
+	/**
+	 * This method is called by the application to notify the linphone core library when the media (RTP) network is reachable.
+	 * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+	 * Most applications just need LinphoneCore.setNetworkReachable().
+	 * @param isReachable whether media network is reachable.
+	 */
+	public void setMediaNetworkReachable(boolean isReachable);
+
+	/**
+	 * Returns the mediastreamer2 (media stack) factory object used by the LinphoneCore. This may be useful to perform
+	 * some advanced media-related configuration options.
+	**/
+	org.linphone.mediastream.Factory getMSFactory();
+
+	/**
+	 * Overrides the list of DNS servers to use.
+	 * Passing null restores the default behaviour, which is to use the dns server list provided by the system.
+	**/
+	public void setDnsServers(String servers[]);
+
+	/**
+	 * Set user certificates directory path (used by SRTP-DTLS).
+	 */
+	public void setUserCertificatesPath(String path);
 }

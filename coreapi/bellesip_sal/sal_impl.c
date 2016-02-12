@@ -82,8 +82,8 @@ void _belle_sip_log(belle_sip_log_level lev, const char *fmt, va_list args) {
 			ortp_level=ORTP_DEBUG;
 			break;
 	}
-	if (ortp_log_level_enabled(ortp_level)){
-		ortp_logv(ortp_level,fmt,args);
+	if (ortp_log_level_enabled("belle-sip", ortp_level)){
+		ortp_logv("belle-sip", ortp_level,fmt,args);
 	}
 }
 
@@ -464,13 +464,13 @@ static void process_auth_requested(void *sal, belle_sip_auth_event_t *event) {
 	sal_auth_info_delete(auth_info);
 }
 
-Sal * sal_init(){
+Sal * sal_init(MSFactory *factory){
 	belle_sip_listener_callbacks_t listener_callbacks;
 	Sal * sal=ms_new0(Sal,1);
 
 	/*belle_sip_object_enable_marshal_check(TRUE);*/
 	sal->auto_contacts=TRUE;
-
+	sal->factory = factory;
 	/*first create the stack, which initializes the belle-sip object's pool for this thread*/
 	belle_sip_set_log_handler(_belle_sip_log);
 	sal->stack = belle_sip_stack_new(NULL);
@@ -542,8 +542,8 @@ void sal_set_callbacks(Sal *ctx, const SalCallbacks *cbs){
 		ctx->callbacks.notify=(SalOnNotify)unimplemented_stub;
 	if (ctx->callbacks.subscribe_received==NULL)
 		ctx->callbacks.subscribe_received=(SalOnSubscribeReceived)unimplemented_stub;
-	if (ctx->callbacks.subscribe_closed==NULL)
-		ctx->callbacks.subscribe_closed=(SalOnSubscribeClosed)unimplemented_stub;
+	if (ctx->callbacks.incoming_subscribe_closed==NULL)
+		ctx->callbacks.incoming_subscribe_closed=(SalOnIncomingSubscribeClosed)unimplemented_stub;
 	if (ctx->callbacks.parse_presence_requested==NULL)
 		ctx->callbacks.parse_presence_requested=(SalOnParsePresenceRequested)unimplemented_stub;
 	if (ctx->callbacks.convert_presence_to_xml_requested==NULL)
@@ -816,6 +816,7 @@ bool_t sal_nat_helper_enabled(Sal *sal) {
 void sal_set_dns_timeout(Sal* sal,int timeout) {
 	belle_sip_stack_set_dns_timeout(sal->stack, timeout);
 }
+
 int sal_get_dns_timeout(const Sal* sal)  {
 	return belle_sip_stack_get_dns_timeout(sal->stack);
 }
@@ -823,12 +824,26 @@ int sal_get_dns_timeout(const Sal* sal)  {
 void sal_set_transport_timeout(Sal* sal,int timeout) {
 	belle_sip_stack_set_transport_timeout(sal->stack, timeout);
 }
+
 int sal_get_transport_timeout(const Sal* sal)  {
 	return belle_sip_stack_get_transport_timeout(sal->stack);
 }
+
+void sal_set_dns_servers(Sal *sal, const MSList *servers){
+	belle_sip_list_t *l = NULL;
+	
+	/*we have to convert the MSList into a belle_sip_list_t first*/
+	for (; servers != NULL; servers = servers->next){
+		l = belle_sip_list_append(l, servers->data);
+	}
+	belle_sip_stack_set_dns_servers(sal->stack, l);
+	belle_sip_list_free(l);
+}
+
 void sal_enable_dns_srv(Sal *sal, bool_t enable) {
 	belle_sip_stack_enable_dns_srv(sal->stack, (unsigned char)enable);
 }
+
 bool_t sal_dns_srv_enabled(const Sal *sal) {
 	return (bool_t)belle_sip_stack_dns_srv_enabled(sal->stack);
 }
@@ -1018,7 +1033,7 @@ static void make_supported_header(Sal *sal){
 		const char *tag=(const char*)it->data;
 		size_t taglen=strlen(tag);
 		if (alltags==NULL || (written+taglen+1>=buflen)) alltags=ms_realloc(alltags,(buflen=buflen*2));
-		snprintf(alltags+written,buflen-written,it->next ? "%s, " : "%s",tag);
+		written+=snprintf(alltags+written,buflen-written,it->next ? "%s, " : "%s",tag);
 	}
 	if (alltags){
 		sal->supported=belle_sip_header_create("Supported",alltags);

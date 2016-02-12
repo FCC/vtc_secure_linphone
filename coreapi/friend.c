@@ -252,9 +252,9 @@ void linphone_friend_invalidate_subscription(LinphoneFriend *lf){
 	/* Notify application that we no longer know the presence activity */
 	if (lf->presence != NULL) {
 		linphone_presence_model_unref(lf->presence);
+		lf->presence = linphone_presence_model_new_with_activity(LinphonePresenceActivityOffline,"unknown activity");
+		linphone_core_notify_notify_presence_received(lc,lf);
 	}
-	lf->presence = linphone_presence_model_new_with_activity(LinphonePresenceActivityOffline,"unknown activity");
-	linphone_core_notify_notify_presence_received(lc,lf);
 
 	lf->initial_subscribes_sent=FALSE;
 }
@@ -265,12 +265,16 @@ void linphone_friend_close_subscriptions(LinphoneFriend *lf){
 	lf->insubs = ms_list_free_with_data(lf->insubs, (MSIterateFunc)sal_op_release);
 }
 
-static void _linphone_friend_destroy(LinphoneFriend *lf){
+static void _linphone_friend_release_ops(LinphoneFriend *lf){
 	lf->insubs = ms_list_free_with_data(lf->insubs, (MSIterateFunc) sal_op_release);
 	if (lf->outsub){
 		sal_op_release(lf->outsub);
 		lf->outsub=NULL;
 	}
+}
+
+static void _linphone_friend_destroy(LinphoneFriend *lf){
+	_linphone_friend_release_ops(lf);
 	if (lf->presence != NULL) linphone_presence_model_unref(lf->presence);
 	if (lf->uri!=NULL) linphone_address_destroy(lf->uri);
 	if (lf->info!=NULL) buddy_info_free(lf->info);
@@ -479,13 +483,25 @@ void linphone_friend_done(LinphoneFriend *fr){
 	linphone_friend_apply(fr,fr->lc);
 }
 
+#if __clang__ || ((__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __GNUC__ > 4)
+#pragma GCC diagnostic push
+#endif
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 LinphoneFriend * linphone_core_create_friend(LinphoneCore *lc) {
-	return linphone_friend_new();
+	LinphoneFriend * lf = linphone_friend_new();
+	lf->lc = lc;
+	return lf;
 }
 
 LinphoneFriend * linphone_core_create_friend_with_address(LinphoneCore *lc, const char *address) {
-	return linphone_friend_new_with_address(address);
+	LinphoneFriend * lf = linphone_friend_new_with_address(address);
+	if (lf)
+		lf->lc = lc;
+	return lf;
 }
+#if __clang__ || ((__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __GNUC__ > 4)
+#pragma GCC diagnostic pop
+#endif
 
 void linphone_core_add_friend(LinphoneCore *lc, LinphoneFriend *lf) {
 	if ((lc->friendlist == NULL) || (linphone_friend_list_add_friend(lc->friendlist, lf) != LinphoneFriendListOK)) return;
@@ -709,6 +725,13 @@ void linphone_friend_unref(LinphoneFriend *lf) {
 
 /* DEPRECATED */
 void linphone_friend_destroy(LinphoneFriend *lf) {
+	linphone_friend_unref(lf);
+}
+
+/*drops all references to the core and unref*/
+void _linphone_friend_release(LinphoneFriend *lf){
+	lf->lc = NULL;
+	_linphone_friend_release_ops(lf);
 	linphone_friend_unref(lf);
 }
 

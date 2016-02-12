@@ -132,12 +132,12 @@ void linphone_account_creator_set_user_data(LinphoneAccountCreator *creator, voi
 static LinphoneAccountCreatorStatus validate_uri(const char* username, const char* domain, const char* route, const char* display_name) {
 	LinphoneProxyConfig* proxy = linphone_proxy_config_new();
 	LinphoneAddress* addr;
-
-	linphone_proxy_config_set_identity(proxy, "sip:user@domain.com");
+	LinphoneAccountCreatorStatus status = LinphoneAccountCreatorOK;
+	linphone_proxy_config_set_identity(proxy, "sip:userame@domain.com");
 
 	if (route && linphone_proxy_config_set_route(proxy, route) != 0) {
-		linphone_proxy_config_destroy(proxy);
-		return LinphoneAccountCreatorRouteInvalid;
+		status = LinphoneAccountCreatorRouteInvalid;
+		goto end;
 	}
 
 	if (username) {
@@ -145,24 +145,23 @@ static LinphoneAccountCreatorStatus validate_uri(const char* username, const cha
 	} else {
 		addr = linphone_address_clone(linphone_proxy_config_get_identity_address(proxy));
 	}
-	linphone_proxy_config_destroy(proxy);
 
 	if (addr == NULL) {
-		return LinphoneAccountCreatorUsernameInvalid;
+		status = LinphoneAccountCreatorUsernameInvalid;
+		goto end;
 	}
 
-	if (domain) {
-		ms_error("TODO: detect invalid domain");
-		linphone_address_set_domain(addr, domain);
+	if (domain && linphone_address_set_domain(addr, domain) != 0) {
+		status = LinphoneAccountCreatorDomainInvalid;
 	}
 
-	if (display_name) {
-		ms_error("TODO: detect invalid display name");
-		linphone_address_set_display_name(addr, display_name);
+	if (display_name && (!strlen(display_name) || linphone_address_set_display_name(addr, display_name) != 0)) {
+		status = LinphoneAccountCreatorDisplayNameInvalid;
 	}
-
 	linphone_address_unref(addr);
-	return LinphoneAccountCreatorOK;
+end:
+	linphone_proxy_config_destroy(proxy);
+	return status;
 }
 
 static bool_t is_matching_regex(const char *entry, const char* regex) {
@@ -185,13 +184,16 @@ static bool_t is_matching_regex(const char *entry, const char* regex) {
 }
 
 LinphoneAccountCreatorStatus linphone_account_creator_set_username(LinphoneAccountCreator *creator, const char *username) {
-	int min_length = lp_config_get_int(creator->core->config, "assistant", "username_min_length", 0);
-	int fixed_length = lp_config_get_int(creator->core->config, "assistant", "username_length", 0);
+	int min_length = lp_config_get_int(creator->core->config, "assistant", "username_min_length", -1);
+	int fixed_length = lp_config_get_int(creator->core->config, "assistant", "username_length", -1);
+	int max_length = lp_config_get_int(creator->core->config, "assistant", "username_max_length", -1);
 	bool_t use_phone_number = lp_config_get_int(creator->core->config, "assistant", "use_phone_number", 0);
 	const char* regex = lp_config_get_string(creator->core->config, "assistant", "username_regex", 0);
 	LinphoneAccountCreatorStatus status;
 	if (min_length > 0 && strlen(username) < min_length) {
 		return LinphoneAccountCreatorUsernameTooShort;
+	} else if (max_length > 0 && strlen(username) > max_length) {
+		return LinphoneAccountCreatorUsernameTooLong;
 	} else if (fixed_length > 0 && strlen(username) != fixed_length) {
 		return LinphoneAccountCreatorUsernameInvalidSize;
 	} else if (use_phone_number && !linphone_proxy_config_is_phone_number(NULL, username)) {
@@ -210,9 +212,12 @@ const char * linphone_account_creator_get_username(const LinphoneAccountCreator 
 }
 
 LinphoneAccountCreatorStatus linphone_account_creator_set_password(LinphoneAccountCreator *creator, const char *password){
-	int min_length = lp_config_get_int(creator->core->config, "assistant", "password_min_length", 0);
+	int min_length = lp_config_get_int(creator->core->config, "assistant", "password_min_length", -1);
+	int max_length = lp_config_get_int(creator->core->config, "assistant", "password_max_length", -1);
 	if (min_length > 0 && strlen(password) < min_length) {
 		return LinphoneAccountCreatorPasswordTooShort;
+	} else if (max_length > 0 && strlen(password) > max_length) {
+		return LinphoneAccountCreatorPasswordTooLong;
 	}
 	set_string(&creator->password, password, FALSE);
 	return LinphoneAccountCreatorOK;
@@ -406,16 +411,23 @@ LinphoneProxyConfig * linphone_account_creator_configure(const LinphoneAccountCr
 	LinphoneProxyConfig *cfg = linphone_core_create_proxy_config(creator->core);
 	char *identity_str = ms_strdup_printf("sip:%s@%s", creator->username, creator->domain);
 	LinphoneAddress *identity = linphone_address_new(identity_str);
+	char *route = NULL;
+	char *domain = NULL;
+	ms_free(identity_str);
 	if (creator->display_name) {
 		linphone_address_set_display_name(identity, creator->display_name);
 	}
-
-	linphone_proxy_config_set_identity(cfg, linphone_address_as_string(identity));
-	linphone_proxy_config_set_server_addr(cfg, creator->domain);
-	linphone_proxy_config_set_route(cfg, creator->route);
+	if (creator->route) {
+		route = ms_strdup_printf("%s;transport=%s", creator->route, linphone_transport_to_string(creator->transport));
+	}
+	if (creator->domain) {
+		domain = ms_strdup_printf("%s;transport=%s", creator->domain, linphone_transport_to_string(creator->transport));
+	}
+	linphone_proxy_config_set_identity_address(cfg, identity);
+	linphone_proxy_config_set_server_addr(cfg, domain);
+	linphone_proxy_config_set_route(cfg, route);
 	linphone_proxy_config_enable_publish(cfg, FALSE);
 	linphone_proxy_config_enable_register(cfg, TRUE);
-	ms_free(identity_str);
 
 	if (strcmp(creator->domain, "sip.linphone.org") == 0) {
 		linphone_proxy_config_enable_avpf(cfg, TRUE);

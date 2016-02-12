@@ -570,13 +570,6 @@ const SalAddress *sal_op_get_to_address(const SalOp *op){
 	return ((SalOpBase*)op)->to_address;
 }
 
-const char *sal_op_get_route(const SalOp *op){
-#ifdef BELLE_SIP
-ms_fatal("sal_op_get_route not supported, use sal_op_get_route_addresses instead");
-#endif
-	return ((SalOpBase*)op)->route;
-}
-
 const char *sal_op_get_remote_ua(const SalOp *op){
 	return ((SalOpBase*)op)->remote_ua;
 }
@@ -613,7 +606,9 @@ void __sal_op_set_network_origin(SalOp *op, const char *origin){
 }
 
 void __sal_op_set_remote_contact(SalOp *op, const char* remote_contact){
-	SET_PARAM(op,remote_contact);
+	assign_address(&((SalOpBase*)op)->remote_contact_address,remote_contact);\
+	/*to preserve header params*/
+	assign_string(&((SalOpBase*)op)->remote_contact,remote_contact); \
 }
 
 void __sal_op_set_network_origin_address(SalOp *op, SalAddress *origin){
@@ -694,6 +689,11 @@ void __sal_op_free(SalOp *op){
 		sal_custom_header_free(b->recv_custom_headers);
 	if (b->sent_custom_headers)
 		sal_custom_header_free(b->sent_custom_headers);
+	
+	if (b->entity_tag != NULL){
+		ms_free(b->entity_tag);
+		b->entity_tag = NULL;
+	}
 	ms_free(op);
 }
 
@@ -1004,4 +1004,18 @@ char* sal_op_get_public_uri(SalOp *op) {
 		return belle_sip_refresher_get_public_uri(op->refresher);
 	}
 	return NULL;
+}
+const char *sal_op_get_entity_tag(const SalOp* op) {
+	SalOpBase* op_base = (SalOpBase*)op;
+	return op_base->entity_tag;
+}
+void sal_op_set_entity_tag(SalOp *op, const char* entity_tag) {
+	SalOpBase* op_base = (SalOpBase*)op;
+	if (op_base->entity_tag != NULL){
+		ms_free(op_base->entity_tag);
+	}
+	if (entity_tag)
+		op_base->entity_tag = ms_strdup(entity_tag);
+	else
+		op_base->entity_tag = NULL;
 }

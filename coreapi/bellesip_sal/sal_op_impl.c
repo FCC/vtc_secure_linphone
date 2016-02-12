@@ -518,14 +518,14 @@ SalReason _sal_reason_from_sip_code(int code) {
 		return SalReasonNotImplemented;
 	case 502:
 		return SalReasonBadGateway;
+	case 503:
+		return SalReasonServiceUnavailable;
 	case 504:
 		return SalReasonServerTimeout;
 	case 600:
 		return SalReasonDoNotDisturb;
 	case 603:
 		return SalReasonDeclined;
-	case 503:
-		return SalReasonServiceUnavailable;
 	default:
 		return SalReasonUnknown;
 	}
@@ -701,7 +701,6 @@ void sal_op_assign_recv_headers(SalOp *op, belle_sip_message_t *incoming){
 const char *sal_op_get_remote_contact(const SalOp *op){
 	/*
 	 * remote contact is filled in process_response
-	 * return sal_custom_header_find(op->base.recv_custom_headers,"Contact");
 	 */
 	return op->base.remote_contact;
 }
@@ -789,4 +788,12 @@ bool_t sal_op_cnx_ip_to_0000_if_sendonly_enabled(SalOp *op) {
 
 bool_t sal_op_is_forked_of(const SalOp *op1, const SalOp *op2){
 	return op1->base.call_id && op2->base.call_id && strcmp(op1->base.call_id, op2->base.call_id) == 0;
+}
+int sal_op_refresh(SalOp *op) {
+	if (op->refresher) {
+		belle_sip_refresher_refresh(op->refresher,belle_sip_refresher_get_expires(op->refresher));
+		return 0;
+	}
+	ms_warning("sal_refresh on op [%p] of type [%s] no refresher",op,sal_op_type_to_string(op->type));
+	return -1;
 }

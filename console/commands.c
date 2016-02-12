@@ -287,10 +287,10 @@ static LPC_COMMAND advanced_commands[] = {
             "'codec list' : list audio codecs\n"
             "'codec enable <index>' : enable available audio codec\n"
             "'codec disable <index>' : disable audio codec" },
-    { "vcodec", lpc_cmd_vcodec, "Video codec configuration",
-            "'vcodec list' : list video codecs\n"
-            "'vcodec enable <index>' : enable available video codec\n"
-            "'vcodec disable <index>' : disable video codec" },
+	{ "vcodec", lpc_cmd_vcodec, "Video codec configuration",
+		"'vcodec list' : list video codecs\n"
+		"'vcodec enable <index>' : enable available video codec\n"
+		"'vcodec disable <index>' : disable video codec" },
 	{ "ec", lpc_cmd_echocancellation, "Echo cancellation",
 	    "'ec on [<delay>] [<tail>] [<framesize>]' : turn EC on with given delay, tail length and framesize\n"
 	    "'ec off' : turn echo cancellation (EC) off\n"
@@ -414,7 +414,8 @@ linphonec_parse_command_line(LinphoneCore *lc, char *cl)
 	{
 		while ( isdigit(*cl) || *cl == '#' || *cl == '*' )
 		{
-			linphone_core_send_dtmf(lc, *cl);
+			if (linphone_core_get_current_call(lc))
+				linphone_call_send_dtmf(linphone_core_get_current_call(lc), *cl);
 			linphone_core_play_dtmf (lc,*cl,100);
 			ms_sleep(1); // be nice
 			++cl;
@@ -1260,6 +1261,8 @@ static int lpc_cmd_soundcard(LinphoneCore *lc, char *args)
 			return 1;
 		}
 
+		linphone_core_use_files(lc,FALSE);
+
 		dev=linphone_core_get_sound_devices(lc);
 		index=atoi(arg2); /* FIXME: handle not-a-number */
 		for(i=0;dev[i]!=NULL;i++)
@@ -1275,6 +1278,7 @@ static int lpc_cmd_soundcard(LinphoneCore *lc, char *args)
 		linphonec_out("No such sound device\n");
 		return 1;
 	}
+
 	if (strcmp(arg1, "capture")==0)
 	{
 		const char *devname=linphone_core_get_capture_device(lc);
@@ -2336,12 +2340,12 @@ static int lpc_cmd_echolimiter(LinphoneCore *lc, char *args){
 
 static int lpc_cmd_mute_mic(LinphoneCore *lc, char *args)
 {
-	linphone_core_mute_mic(lc, 1);
+	linphone_core_enable_mic(lc, 0);
 	return 1;
 }
 
 static int lpc_cmd_unmute_mic(LinphoneCore *lc, char *args){
-	linphone_core_mute_mic(lc, 0);
+	linphone_core_enable_mic(lc, 1);
 	return 1;
 }
 
@@ -2452,7 +2456,7 @@ static void lpc_display_call_states(LinphoneCore *lc){
 			const char *flag;
 			bool_t in_conference;
 			call=(LinphoneCall*)elem->data;
-			in_conference=linphone_call_params_get_local_conference_mode(linphone_call_get_current_params(call));
+			in_conference=(linphone_call_get_conference(call) != NULL);
 			tmp=linphone_call_get_remote_address_as_string (call);
 			flag=in_conference ? "conferencing" : "";
 			flag=linphone_call_has_transfer_pending(call) ? "transfer pending" : flag;

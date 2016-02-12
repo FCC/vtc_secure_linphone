@@ -38,6 +38,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	#define LINPHONE_PUBLIC MS2_PUBLIC
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*Dirty hack, keep in sync with mediastreamer2/include/mediastream.h */
 #ifndef PAYLOAD_TYPE_FLAG_CAN_RECV
 #define PAYLOAD_TYPE_FLAG_CAN_RECV	PAYLOAD_TYPE_USER_FLAG_1
@@ -106,6 +110,7 @@ void sal_address_set_secure(SalAddress *addr, bool_t enabled);
 
 SalTransport sal_address_get_transport(const SalAddress* addr);
 const char* sal_address_get_transport_name(const SalAddress* addr);
+const char *sal_address_get_method_param(const SalAddress *addr);
 
 void sal_address_set_display_name(SalAddress *addr, const char *display_name);
 void sal_address_set_username(SalAddress *addr, const char *username);
@@ -118,15 +123,17 @@ void sal_address_destroy(SalAddress *u);
 void sal_address_set_param(SalAddress *u,const char* name,const char* value);
 void sal_address_set_transport(SalAddress* addr,SalTransport transport);
 void sal_address_set_transport_name(SalAddress* addr,const char* transport);
+void sal_address_set_method_param(SalAddress *addr, const char *method);
 void sal_address_set_params(SalAddress *addr, const char *params);
 void sal_address_set_uri_params(SalAddress *addr, const char *params);
+bool_t sal_address_has_uri_param(SalAddress *addr, const char *name);
 bool_t sal_address_is_ipv6(const SalAddress *addr);
 bool_t sal_address_is_sip(const SalAddress *addr);
 void sal_address_set_password(SalAddress *addr, const char *passwd);
 const char *sal_address_get_password(const SalAddress *addr);
 void sal_address_set_header(SalAddress *addr, const char *header_name, const char *header_value);
 
-LINPHONE_PUBLIC Sal * sal_init(void);
+LINPHONE_PUBLIC Sal * sal_init(MSFactory *factory);
 LINPHONE_PUBLIC void sal_uninit(Sal* sal);
 void sal_set_user_pointer(Sal *sal, void *user_data);
 void *sal_get_user_pointer(const Sal *sal);
@@ -240,8 +247,8 @@ typedef struct SalStreamDescription{
 	SalSrtpCryptoAlgo crypto[SAL_CRYPTO_ALGO_MAX];
 	unsigned int crypto_local_tag;
 	int max_rate;
-    bool_t  implicit_rtcp_fb;
-    OrtpRtcpFbConfiguration rtcp_fb;
+	bool_t  implicit_rtcp_fb;
+	OrtpRtcpFbConfiguration rtcp_fb;
 	OrtpRtcpXrConfiguration rtcp_xr;
 	SalCustomSdpAttribute *custom_sdp_attributes;
 	SalIceCandidate ice_candidates[SAL_MEDIA_DESCRIPTION_MAX_ICE_CANDIDATES];
@@ -249,7 +256,7 @@ typedef struct SalStreamDescription{
 	char ice_ufrag[SAL_MEDIA_DESCRIPTION_MAX_ICE_UFRAG_LEN];
 	char ice_pwd[SAL_MEDIA_DESCRIPTION_MAX_ICE_PWD_LEN];
 	bool_t ice_mismatch;
-	bool_t ice_completed;
+	bool_t set_nortpproxy; /*Formely set by ICE to indicate to the proxy that it has nothing to do*/
 	bool_t rtcp_mux;
 	bool_t pad[1];
 	char dtls_fingerprint[256];
@@ -279,7 +286,7 @@ typedef struct SalMediaDescription{
 	char ice_ufrag[SAL_MEDIA_DESCRIPTION_MAX_ICE_UFRAG_LEN];
 	char ice_pwd[SAL_MEDIA_DESCRIPTION_MAX_ICE_PWD_LEN];
 	bool_t ice_lite;
-	bool_t ice_completed;
+	bool_t set_nortpproxy;
 	bool_t pad[2];
 } SalMediaDescription;
 
@@ -347,6 +354,7 @@ typedef struct SalOpBase{
 	SalAddress* service_route; /*as defined by rfc3608, might be a list*/
 	SalCustomHeader *sent_custom_headers;
 	SalCustomHeader *recv_custom_headers;
+	char* entity_tag; /*as defined by rfc3903 (I.E publih)*/ 
 } SalOpBase;
 
 
@@ -483,7 +491,7 @@ typedef void (*SalOnNotifyRefer)(SalOp *op, SalReferStatus state);
 typedef void (*SalOnSubscribeResponse)(SalOp *op, SalSubscribeStatus status);
 typedef void (*SalOnNotify)(SalOp *op, SalSubscribeStatus status, const char *event, SalBodyHandler *body);
 typedef void (*SalOnSubscribeReceived)(SalOp *salop, const char *event, const SalBodyHandler *body);
-typedef void (*SalOnSubscribeClosed)(SalOp *salop);
+typedef void (*SalOnIncomingSubscribeClosed)(SalOp *salop);
 typedef void (*SalOnParsePresenceRequested)(SalOp *salop, const char *content_type, const char *content_subtype, const char *content, SalPresenceModel **result);
 typedef void (*SalOnConvertPresenceToXMLRequested)(SalOp *salop, SalPresenceModel *presence, const char *contact, char **content);
 typedef void (*SalOnNotifyPresence)(SalOp *op, SalSubscribeStatus ss, SalPresenceModel *model, const char *msg);
@@ -517,7 +525,7 @@ typedef struct SalCallbacks{
 	SalOnIsComposingReceived is_composing_received;
 	SalOnNotifyRefer notify_refer;
 	SalOnSubscribeReceived subscribe_received;
-	SalOnSubscribeClosed subscribe_closed;
+	SalOnIncomingSubscribeClosed incoming_subscribe_closed;
 	SalOnSubscribeResponse subscribe_response;
 	SalOnNotify notify;
 	SalOnSubscribePresenceReceived subscribe_presence_received;
@@ -634,6 +642,8 @@ void sal_op_set_to(SalOp *op, const char *to);
 void sal_op_set_to_address(SalOp *op, const SalAddress *to);
 SalOp *sal_op_ref(SalOp* h);
 void sal_op_stop_refreshing(SalOp *op);
+int sal_op_refresh(SalOp *op);
+	
 void sal_op_release(SalOp *h);
 /*same as release, but does not stop refresher if any*/
 void* sal_op_unref(SalOp* op);
@@ -647,10 +657,11 @@ const SalAddress *sal_op_get_from_address(const SalOp *op);
 const char *sal_op_get_to(const SalOp *op);
 const SalAddress *sal_op_get_to_address(const SalOp *op);
 const SalAddress *sal_op_get_contact_address(const SalOp *op);
-const char *sal_op_get_route(const SalOp *op);
 const MSList* sal_op_get_route_addresses(const SalOp *op);
 const char *sal_op_get_proxy(const SalOp *op);
+/*raw contact header value with header params*/
 const char *sal_op_get_remote_contact(const SalOp *op);
+/*contact header address only (I.E without header params*/
 const SalAddress* sal_op_get_remote_contact_address(const SalOp *op);
 /*for incoming requests, returns the origin of the packet as a sip uri*/
 const char *sal_op_get_network_origin(const SalOp *op);
@@ -675,6 +686,10 @@ const SalErrorInfo *sal_op_get_error_info(const SalOp *op);
 void sal_error_info_reset(SalErrorInfo *ei);
 void sal_error_info_set(SalErrorInfo *ei, SalReason reason, int code, const char *status_string, const char *warning);
 
+/*entity tag used for publish (see RFC 3903)*/
+const char *sal_op_get_entity_tag(const SalOp* op);
+void sal_op_set_entity_tag(SalOp *op, const char* entity_tag);
+	
 /*Call API*/
 int sal_call_set_local_media_description(SalOp *h, SalMediaDescription *desc);
 int sal_call(SalOp *h, const char *from, const char *to);
@@ -731,8 +746,9 @@ int sal_notify_presence(SalOp *op, SalPresenceModel *presence);
 int sal_notify_presence_close(SalOp *op);
 
 /*presence publish */
-int sal_publish_presence(SalOp *op, const char *from, const char *to, int expires, SalPresenceModel *presence);
-
+//int sal_publish_presence(SalOp *op, const char *from, const char *to, int expires, SalPresenceModel *presence);
+SalBodyHandler *sal_presence_model_create_body_handler(SalPresenceModel *presence);
+	
 
 /*ping: main purpose is to obtain its own contact address behind firewalls*/
 int sal_ping(SalOp *op, const char *from, const char *to);
@@ -745,11 +761,11 @@ int sal_subscribe(SalOp *op, const char *from, const char *to, const char *event
 int sal_unsubscribe(SalOp *op);
 int sal_subscribe_accept(SalOp *op);
 int sal_subscribe_decline(SalOp *op, SalReason reason);
-int sal_subscribe_refresh(SalOp *op);
 int sal_notify(SalOp *op, const SalBodyHandler *body);
 int sal_notify_close(SalOp *op);
 int sal_publish(SalOp *op, const char *from, const char *to, const char*event_name, int expires, const SalBodyHandler *body);
-
+int sal_op_unpublish(SalOp *op);
+	
 /*privacy, must be in sync with LinphonePrivacyMask*/
 typedef enum _SalPrivacy {
 	SalPrivacyNone=0x0,
@@ -834,6 +850,7 @@ LINPHONE_PUBLIC	void sal_set_dns_timeout(Sal* sal,int timeout);
 LINPHONE_PUBLIC int sal_get_dns_timeout(const Sal* sal);
 LINPHONE_PUBLIC	void sal_set_transport_timeout(Sal* sal,int timeout);
 LINPHONE_PUBLIC int sal_get_transport_timeout(const Sal* sal);
+void sal_set_dns_servers(Sal *sal, const MSList *servers);
 LINPHONE_PUBLIC void sal_enable_dns_srv(Sal *sal, bool_t enable);
 LINPHONE_PUBLIC bool_t sal_dns_srv_enabled(const Sal *sal);
 LINPHONE_PUBLIC void sal_set_dns_user_hosts_file(Sal *sal, const char *hosts_file);
@@ -881,6 +898,9 @@ void sal_set_http_proxy_port(Sal *sal, int port) ;
 const char *sal_get_http_proxy_host(const Sal *sal);
 int sal_get_http_proxy_port(const Sal *sal);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

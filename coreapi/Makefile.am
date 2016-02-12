@@ -29,11 +29,13 @@ linphone_include_HEADERS=\
 	buffer.h \
 	call_log.h \
 	call_params.h \
+	conference.h \
 	content.h \
 	event.h \
 	friendlist.h \
 	linphonecore.h \
 	linphonecore_utils.h \
+	ringtoneplayer.h \
 	linphonefriend.h \
 	linphonepresence.h \
 	linphone_proxy_config.h \
@@ -56,7 +58,7 @@ liblinphone_la_SOURCES=\
 	call_params.c \
 	chat.c \
 	chat_file_transfer.c \
-	conference.c \
+	conference.cc conference_private.h \
 	contactprovider.c contactprovider.h contact_providers_priv.h \
 	content.c \
 	dict.c \
@@ -90,6 +92,7 @@ liblinphone_la_SOURCES=\
 	xml.c \
 	xmlrpc.c \
 	vtables.c \
+	ringtoneplayer.c ringtoneplayer.h\
 	$(GITVERSION_FILE)
 
 if BUILD_UPNP
@@ -115,7 +118,6 @@ liblinphone_la_SOURCES+=linphone_tunnel.cc TunnelManager.cc TunnelManager.hh lin
 else
 liblinphone_la_SOURCES+=linphone_tunnel_stubs.c linphone_tunnel.h
 endif
-
 
 
 liblinphone_la_LDFLAGS= -version-info $(LIBLINPHONE_SO_VERSION) -no-undefined

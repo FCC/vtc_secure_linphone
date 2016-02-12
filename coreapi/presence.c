@@ -67,6 +67,7 @@ struct _LinphonePresencePerson {
  * This model is not complete. For example, it does not handle devices.
  */
 struct _LinphonePresenceModel {
+	LinphoneAddress *presentity; /* "The model seeks to describe the presentity, identified by a presentity URI.*/
 	void *user_data;
 	int refcnt;
 	MSList *services;	/**< A list of _LinphonePresenceService structures. Also named tuples in the RFC. */
@@ -157,7 +158,7 @@ static void presence_activity_delete(LinphonePresenceActivity *activity) {
 static time_t parse_timestamp(const char *timestamp) {
 	struct tm ret;
 	time_t seconds;
-#ifdef LINPHONE_WINDOWS_UNIVERSAL
+#if defined(LINPHONE_WINDOWS_UNIVERSAL) || defined(LINPHONE_MSC_VER_GREATER_19)
 	long adjust_timezone;
 #else
 	time_t adjust_timezone;
@@ -174,7 +175,7 @@ static time_t parse_timestamp(const char *timestamp) {
 		ms_error("mktime() failed: %s", strerror(errno));
 		return (time_t)-1;
 	}
-#ifdef LINPHONE_WINDOWS_UNIVERSAL
+#if defined(LINPHONE_WINDOWS_UNIVERSAL) || defined(LINPHONE_MSC_VER_GREATER_19)
 	_get_timezone(&adjust_timezone);
 #else
 	adjust_timezone = timezone;
@@ -246,7 +247,8 @@ static void presence_model_find_open_basic_status(LinphonePresenceService *servi
 
 static void presence_model_delete(LinphonePresenceModel *model) {
 	if (model == NULL) return;
-
+	if (model->presentity)
+		linphone_address_unref(model->presentity);
 	ms_list_for_each(model->services, (MSIterateFunc)linphone_presence_service_unref);
 	ms_list_free(model->services);
 	ms_list_for_each(model->persons, (MSIterateFunc)linphone_presence_person_unref);
@@ -671,7 +673,22 @@ int linphone_presence_model_clear_persons(LinphonePresenceModel *model) {
 	return 0;
 }
 
+int linphone_presence_model_set_presentity(LinphonePresenceModel *model, const LinphoneAddress *presentity) {
+	
+	if (model->presentity) {
+		linphone_address_unref(model->presentity);
+		model->presentity = NULL;
+	}
+	if (presentity) {
+		model->presentity=linphone_address_clone(presentity);
+		linphone_address_clean(model->presentity);
+	}
+	return 0;
+}
 
+const LinphoneAddress * linphone_presence_model_get_presentity(const LinphonePresenceModel *model) {
+	return model->presentity;
+}
 
 /*****************************************************************************
  * PRESENCE SERVICE FUNCTIONS TO GET ACCESS TO ALL FUNCTIONALITIES           *
@@ -1443,7 +1460,7 @@ static LinphonePresenceModel * process_pidf_xml_presence_notification(xmlparsing
 
 
 void linphone_core_add_subscriber(LinphoneCore *lc, const char *subscriber, SalOp *op){
-	LinphoneFriend *fl=linphone_friend_new_with_address(subscriber);
+	LinphoneFriend *fl=linphone_core_create_friend_with_address(lc,subscriber);
 	char *tmp;
 	
 	if (fl==NULL) return ;
@@ -1772,24 +1789,28 @@ static void write_xml_presence_person_obj(LinphonePresencePerson *person, struct
 	if (err < 0) *st->err = err;
 }
 
-void linphone_notify_convert_presence_to_xml(SalOp *op, SalPresenceModel *presence, const char *contact, char **content) {
-	LinphonePresenceModel *model;
-	xmlBufferPtr buf;
-	xmlTextWriterPtr writer;
+char *linphone_presence_model_to_xml(LinphonePresenceModel *model) {
+	xmlBufferPtr buf = NULL;
+	xmlTextWriterPtr writer = NULL;
 	int err;
-
-	if ((contact == NULL) || (content == NULL)) return;
-
-	model = (LinphonePresenceModel *)presence;
+	char *contact = NULL;
+	char * content = NULL;
+	
+	if (model->presentity) {
+		contact = linphone_address_as_string_uri_only(model->presentity);
+	} else {
+		ms_error("Cannot convert presence model [%p] to xml because no presentity set", model);
+		goto  end;
+	}
 	buf = xmlBufferCreate();
 	if (buf == NULL) {
 		ms_error("Error creating the XML buffer");
-		return;
+		goto end;
 	}
 	writer = xmlNewTextWriterMemory(buf, 0);
 	if (writer == NULL) {
 		ms_error("Error creating the XML writer");
-		return;
+		goto end;
 	}
 
 	xmlTextWriterSetIndent(writer,1);
@@ -1815,7 +1836,7 @@ void linphone_notify_convert_presence_to_xml(SalOp *op, SalPresenceModel *presen
 		} else {
 			struct _presence_service_obj_st st={0};
 			st.writer = writer;
-			st.contact = contact;
+			st.contact = contact; /*default value*/
 			st.err = &err;
 			ms_list_for_each2(model->services, (MSIterate2Func)write_xml_presence_service_obj, &st);
 		}
@@ -1842,10 +1863,14 @@ void linphone_notify_convert_presence_to_xml(SalOp *op, SalPresenceModel *presen
 	}
 	if (err > 0) {
 		/* xmlTextWriterEndDocument returns the size of the content. */
-		*content = ms_strdup((char *)buf->content);
+		content =  ms_strdup((char *)buf->content);
 	}
-	xmlFreeTextWriter(writer);
-	xmlBufferFree(buf);
+
+end:
+	if (contact) ms_free(contact);
+	if (writer) xmlFreeTextWriter(writer);
+	if (buf) xmlBufferFree(buf);
+	return content;
 }
 
 void linphone_notify_recv(LinphoneCore *lc, SalOp *op, SalSubscribeStatus ss, SalPresenceModel *model){

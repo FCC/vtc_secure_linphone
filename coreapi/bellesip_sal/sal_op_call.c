@@ -57,13 +57,13 @@ static void sdp_process(SalOp *h){
 
 	h->result=sal_media_description_new();
 	if (h->sdp_offering){
-		offer_answer_initiate_outgoing(h->base.local_media,h->base.remote_media,h->result);
+		offer_answer_initiate_outgoing(h->base.root->factory, h->base.local_media,h->base.remote_media,h->result);
 	}else{
 		int i;
 		if (h->sdp_answer){
 			belle_sip_object_unref(h->sdp_answer);
 		}
-		offer_answer_initiate_incoming(h->base.local_media,h->base.remote_media,h->result,h->base.root->one_matching_codec);
+		offer_answer_initiate_incoming(h->base.root->factory, h->base.local_media,h->base.remote_media,h->result,h->base.root->one_matching_codec);
 		/*for backward compatibility purpose*/
 		if(h->cnx_ip_to_0000_if_sendonly_enabled && sal_media_description_has_dir(h->result,SalStreamSendOnly)) {
 			set_addr_to_0000(h->result->addr);
@@ -308,7 +308,7 @@ static void call_process_response(void *op_base, const belle_sip_response_event_
 						if (code >=200 && code<300) {
 							handle_sdp_from_response(op,response);
 							ack=belle_sip_dialog_create_ack(op->dialog,belle_sip_dialog_get_local_seq_number(op->dialog));
-							if (ack==NULL) {
+							if (ack == NULL) {
 								ms_error("This call has been already terminated.");
 								return ;
 							}
@@ -317,6 +317,7 @@ static void call_process_response(void *op_base, const belle_sip_response_event_
 								belle_sip_object_unref(op->sdp_answer);
 								op->sdp_answer=NULL;
 							}
+							belle_sip_message_add_header(BELLE_SIP_MESSAGE(ack),BELLE_SIP_HEADER(op->base.root->user_agent));
 							belle_sip_dialog_send_ack(op->dialog,ack);
 							op->base.root->callbacks.call_accepted(op); /*INVITE*/
 							op->state=SalOpStateActive;

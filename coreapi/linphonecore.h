@@ -38,15 +38,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define LINPHONE_HOSTNAME_SIZE 128
 
 #ifndef LINPHONE_PUBLIC
-	#define LINPHONE_PUBLIC MS2_PUBLIC
+#define LINPHONE_PUBLIC MS2_PUBLIC
 #endif
 
 #ifndef LINPHONE_DEPRECATED
-#if defined(_MSC_VER)
-	#define LINPHONE_DEPRECATED __declspec(deprecated)
-#else
-	#define LINPHONE_DEPRECATED __attribute__ ((deprecated))
-#endif
+#define LINPHONE_DEPRECATED MS2_DEPRECATED
 #endif
 
 
@@ -139,6 +135,7 @@ enum _LinphoneStreamType {
  * @ingroup initializing
 **/
 typedef enum _LinphoneStreamType LinphoneStreamType;
+
 /**
  * Function returning a human readable value for LinphoneStreamType.
  * @ingroup initializing
@@ -410,6 +407,7 @@ LINPHONE_PUBLIC const char* linphone_privacy_to_string(LinphonePrivacy privacy);
 #include "event.h"
 #include "linphonefriend.h"
 #include "xmlrpc.h"
+#include "conference.h"
 #else
 #include "linphone/buffer.h"
 #include "linphone/call_log.h"
@@ -418,6 +416,7 @@ LINPHONE_PUBLIC const char* linphone_privacy_to_string(LinphonePrivacy privacy);
 #include "linphone/event.h"
 #include "linphone/linphonefriend.h"
 #include "linphone/xmlrpc.h"
+#include "linphone/conference.h"
 #endif
 
 LINPHONE_PUBLIC	LinphoneAddress * linphone_address_new(const char *addr);
@@ -429,10 +428,11 @@ LINPHONE_PUBLIC	const char *linphone_address_get_display_name(const LinphoneAddr
 LINPHONE_PUBLIC	const char *linphone_address_get_username(const LinphoneAddress *u);
 LINPHONE_PUBLIC	const char *linphone_address_get_domain(const LinphoneAddress *u);
 LINPHONE_PUBLIC int linphone_address_get_port(const LinphoneAddress *u);
-LINPHONE_PUBLIC	void linphone_address_set_display_name(LinphoneAddress *u, const char *display_name);
-LINPHONE_PUBLIC	void linphone_address_set_username(LinphoneAddress *uri, const char *username);
-LINPHONE_PUBLIC	void linphone_address_set_domain(LinphoneAddress *uri, const char *host);
-LINPHONE_PUBLIC	void linphone_address_set_port(LinphoneAddress *uri, int port);
+LINPHONE_PUBLIC	int linphone_address_set_display_name(LinphoneAddress *u, const char *display_name);
+LINPHONE_PUBLIC	int linphone_address_set_username(LinphoneAddress *uri, const char *username);
+LINPHONE_PUBLIC	int linphone_address_set_domain(LinphoneAddress *uri, const char *host);
+LINPHONE_PUBLIC	int linphone_address_set_port(LinphoneAddress *uri, int port);
+LINPHONE_PUBLIC int linphone_address_set_transport(LinphoneAddress *uri,LinphoneTransportType type);
 /*remove tags, params etc... so that it is displayable to the user*/
 LINPHONE_PUBLIC	void linphone_address_clean(LinphoneAddress *uri);
 LINPHONE_PUBLIC bool_t linphone_address_is_secure(const LinphoneAddress *addr);
@@ -440,7 +440,8 @@ LINPHONE_PUBLIC bool_t linphone_address_get_secure(const LinphoneAddress *addr);
 LINPHONE_PUBLIC void linphone_address_set_secure(LinphoneAddress *addr, bool_t enabled);
 LINPHONE_PUBLIC bool_t linphone_address_is_sip(const LinphoneAddress *uri);
 LINPHONE_PUBLIC LinphoneTransportType linphone_address_get_transport(const LinphoneAddress *uri);
-LINPHONE_PUBLIC void linphone_address_set_transport(LinphoneAddress *uri,LinphoneTransportType type);
+LINPHONE_PUBLIC const char *linphone_address_get_method_param(const LinphoneAddress *addr);
+LINPHONE_PUBLIC void linphone_address_set_method_param(LinphoneAddress *addr, const char *method);
 LINPHONE_PUBLIC	char *linphone_address_as_string(const LinphoneAddress *u);
 LINPHONE_PUBLIC	char *linphone_address_as_string_uri_only(const LinphoneAddress *u);
 LINPHONE_PUBLIC	bool_t linphone_address_weak_equal(const LinphoneAddress *a1, const LinphoneAddress *a2);
@@ -888,10 +889,19 @@ LINPHONE_PUBLIC void linphone_call_set_native_video_window_id(LinphoneCall *call
  * @param call #LinphoneCall
  * @return TRUE if part of a conference.
  *
- * @deprecated Use linphone_call_params_get_local_conference_mode(linphone_call_get_current_params(call)) instead.
+ * @deprecated Use linphone_call_get_conference() instead.
  * @ingroup call_control
  */
 LINPHONE_PUBLIC	LINPHONE_DEPRECATED bool_t linphone_call_is_in_conference(const LinphoneCall *call);
+
+/**
+ * Return the associated conference object
+ * @param call #LinphoneCall
+ * @return A pointer on #LinphoneConference or NULL if the call is not part
+ * of any conference.
+ * @ingroup call_control
+ */
+LINPHONE_PUBLIC LinphoneConference *linphone_call_get_conference(const LinphoneCall *call);
 /**
  * Enables or disable echo cancellation for this call
  * @param call
@@ -1032,8 +1042,6 @@ LINPHONE_PUBLIC	const char *linphone_registration_state_to_string(LinphoneRegist
 /**
  * @}
  */
-
-#include "linphone_proxy_config.h"
 
 /**
  * @addtogroup authentication
@@ -1190,8 +1198,12 @@ LINPHONE_PUBLIC LinphoneAuthInfo * linphone_auth_info_new_from_config_file(LpCon
 
 #ifdef IN_LINPHONE
 #include "account_creator.h"
+#include "friendlist.h"
+#include "linphone_proxy_config.h"
 #else
 #include "linphone/account_creator.h"
+#include "linphone/friendlist.h"
+#include "linphone/linphone_proxy_config.h"
 #endif
 
 
@@ -1236,7 +1248,7 @@ typedef enum _LinphoneChatMessageState {
  * @param ud application user data
  * @deprecated
  */
-typedef LINPHONE_DEPRECATED void (*LinphoneChatMessageStateChangedCb)(LinphoneChatMessage* msg,LinphoneChatMessageState state,void* ud);
+typedef void (*LinphoneChatMessageStateChangedCb)(LinphoneChatMessage* msg,LinphoneChatMessageState state,void* ud);
 
 /**
  * Call back used to notify message delivery status
@@ -2287,8 +2299,36 @@ LINPHONE_PUBLIC void linphone_core_set_log_level(OrtpLogLevel loglevel);
  * @param loglevel A bitmask of the log levels to set.
  */
 LINPHONE_PUBLIC void linphone_core_set_log_level_mask(OrtpLogLevel loglevel);
+
+/**
+ * Enable logs in supplied FILE*.
+ *
+ * @ingroup misc
+ * @deprecated Use #linphone_core_set_log_file and #linphone_core_set_log_level instead.
+ *
+ * @param file a C FILE* where to fprintf logs. If null stdout is used.
+ *
+**/
 LINPHONE_PUBLIC void linphone_core_enable_logs(FILE *file);
+
+/**
+ * Enable logs through the user's supplied log callback.
+ *
+ * @ingroup misc
+ * @deprecated Use #linphone_core_set_log_handler and #linphone_core_set_log_level instead.
+ *
+ * @param logfunc The address of a OrtpLogFunc callback whose protoype is
+ *            	  typedef void (*OrtpLogFunc)(OrtpLogLevel lev, const char *fmt, va_list args);
+ *
+**/
 LINPHONE_PUBLIC void linphone_core_enable_logs_with_cb(OrtpLogFunc logfunc);
+
+/**
+ * Entirely disable logging.
+ *
+ * @ingroup misc
+ * @deprecated Use #linphone_core_set_log_level instead.
+**/
 LINPHONE_PUBLIC void linphone_core_disable_logs(void);
 
 /**
@@ -2679,6 +2719,16 @@ LINPHONE_PUBLIC void linphone_core_enable_dns_srv(LinphoneCore *lc, bool_t enabl
  * @ingroup media_parameters
  */
 LINPHONE_PUBLIC bool_t linphone_core_dns_srv_enabled(const LinphoneCore *lc);
+
+/**
+ * Forces liblinphone to use the supplied list of dns servers, instead of system's ones.
+ * @param[in] lc #LinphoneCore object.
+ * @param[in] a #MSList of strings containing the IP addresses of DNS servers to be used.
+ * Setting to NULL restores default behaviour, which is to use the DNS server list provided by the system.
+ * The list is copied internally.
+ * @ingroup media_parameters
+ */
+LINPHONE_PUBLIC void linphone_core_set_dns_servers(LinphoneCore *lc, const MSList *servers);
 
 /**
  * Returns the list of available audio codecs.
@@ -3197,6 +3247,10 @@ LINPHONE_PUBLIC void linphone_core_set_ring_during_incoming_early_media(Linphone
 LINPHONE_PUBLIC bool_t linphone_core_get_ring_during_incoming_early_media(const LinphoneCore *lc);
 
 LINPHONE_PUBLIC int linphone_core_preview_ring(LinphoneCore *lc, const char *ring,LinphoneCoreCbFunc func,void * userdata);
+/**
+ * Returns the MSFactory (mediastreamer2 factory) used by the LinphoneCore to control mediastreamer2 library.
+**/
+LINPHONE_PUBLIC MSFactory* linphone_core_get_ms_factory(LinphoneCore* lc);
 LINPHONE_PUBLIC int linphone_core_play_local(LinphoneCore *lc, const char *audiofile);
 LINPHONE_PUBLIC	void linphone_core_enable_echo_cancellation(LinphoneCore *lc, bool_t val);
 LINPHONE_PUBLIC	bool_t linphone_core_echo_cancellation_enabled(LinphoneCore *lc);
@@ -3423,7 +3477,7 @@ LINPHONE_PUBLIC bool_t linphone_core_video_capture_enabled(LinphoneCore *lc);
 LINPHONE_PUBLIC bool_t linphone_core_video_display_enabled(LinphoneCore *lc);
 
 LINPHONE_PUBLIC	void linphone_core_set_video_policy(LinphoneCore *lc, const LinphoneVideoPolicy *policy);
-LINPHONE_PUBLIC const LinphoneVideoPolicy *linphone_core_get_video_policy(LinphoneCore *lc);
+LINPHONE_PUBLIC const LinphoneVideoPolicy *linphone_core_get_video_policy(const LinphoneCore *lc);
 
 typedef struct MSVideoSizeDef{
 	MSVideoSize vsize;
@@ -3700,6 +3754,22 @@ LINPHONE_PUBLIC	void linphone_core_set_network_reachable(LinphoneCore* lc,bool_t
 LINPHONE_PUBLIC	bool_t linphone_core_is_network_reachable(LinphoneCore* lc);
 
 /**
+ * @ingroup network_parameters
+ * This method is called by the application to notify the linphone core library when the SIP network is reachable.
+ * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+ * Most applications just need linphone_core_set_network_reachable().
+ */
+LINPHONE_PUBLIC	void linphone_core_set_sip_network_reachable(LinphoneCore* lc,bool_t value);
+
+/**
+ * @ingroup network_parameters
+ * This method is called by the application to notify the linphone core library when the media (RTP) network is reachable.
+ * This is for advanced usage, when SIP and RTP layers are required to use different interfaces.
+ * Most applications just need linphone_core_set_network_reachable().
+ */
+LINPHONE_PUBLIC	void linphone_core_set_media_network_reachable(LinphoneCore* lc,bool_t value);
+
+/**
  *  @ingroup network_parameters
  *  enable signaling keep alive. small udp packet sent periodically to keep udp NAT association
  */
@@ -3795,6 +3865,14 @@ LINPHONE_PUBLIC void linphone_core_set_user_certificates_path(LinphoneCore *lc, 
 LINPHONE_PUBLIC const char *linphone_core_get_user_certificates_path(LinphoneCore *lc);
 
 /**
+ * Reload mediastreamer2 plugins from specified directory.
+ * @param[in] lc #LinphoneCore object.
+ * @param[in] directory the path from where plugins are to be loaded, pass NULL to use default (compile-time determined) plugin directory.
+ * @ingroup initializing
+ */
+LINPHONE_PUBLIC void linphone_core_reload_ms_plugins(LinphoneCore *lc, const char *path);
+
+/**
  * Search from the list of current calls if a remote address match uri
  * @ingroup call_control
  * @param lc
@@ -3803,8 +3881,36 @@ LINPHONE_PUBLIC const char *linphone_core_get_user_certificates_path(LinphoneCor
  */
 LINPHONE_PUBLIC LinphoneCall* linphone_core_find_call_from_uri(const LinphoneCore *lc, const char *uri);
 
-LINPHONE_PUBLIC	int linphone_core_add_to_conference(LinphoneCore *lc, LinphoneCall *call);
-LINPHONE_PUBLIC	int linphone_core_add_all_to_conference(LinphoneCore *lc);
+/**
+ * @addtogroup call_control
+ * @{
+ */
+
+/**
+ * Create a conference
+ * @param lc The #LinphoneCore instance where the conference will be created inside.
+ * @param params Parameters of the conference. See #LinphoneConferenceParms.
+ * @return A pointer on the freshly created conference. That object will be automatically
+ * freed by the core after calling linphone_core_terminate_conference().
+ */
+LINPHONE_PUBLIC LinphoneConference *linphone_core_create_conference_with_params(LinphoneCore *lc, const LinphoneConferenceParams *params);
+/**
+ * Add a participant to the conference. If no conference is going on
+ * a new internal conference context is created and the participant is
+ * added to it.
+ * @param lc #LinphoneCore
+ * @param call The current call with the participant to add
+ * @return 0 if succeeded. Negative number if failed
+ */
+LINPHONE_PUBLIC int linphone_core_add_to_conference(LinphoneCore *lc, LinphoneCall *call);
+/**
+ * Add all current calls into the conference. If no conference is running
+ * a new internal conference context is created and all current calls
+ * are added to it.
+ * @param lc #LinphoneCore
+ * @return 0 if succeeded. Negative number if failed
+ */
+LINPHONE_PUBLIC int linphone_core_add_all_to_conference(LinphoneCore *lc);
 /**
  * Remove a call from the conference.
  * @param lc the linphone core
@@ -3820,21 +3926,75 @@ LINPHONE_PUBLIC	int linphone_core_add_all_to_conference(LinphoneCore *lc);
  *
  * @return 0 if successful, -1 otherwise.
  **/
- LINPHONE_PUBLIC	int linphone_core_remove_from_conference(LinphoneCore *lc, LinphoneCall *call);
+ LINPHONE_PUBLIC int linphone_core_remove_from_conference(LinphoneCore *lc, LinphoneCall *call);
 /**
  * Indicates whether the local participant is part of a conference.
+ * @warning That function automatically fails in the case of conferences using a
+ * conferencet server (focus). If you use such a conference, you should use
+ * linphone_conference_remove_participant() instead.
  * @param lc the linphone core
  * @return TRUE if the local participant is in a conference, FALSE otherwise.
-**/
-LINPHONE_PUBLIC	bool_t linphone_core_is_in_conference(const LinphoneCore *lc);
-LINPHONE_PUBLIC	int linphone_core_enter_conference(LinphoneCore *lc);
-LINPHONE_PUBLIC	int linphone_core_leave_conference(LinphoneCore *lc);
-LINPHONE_PUBLIC	float linphone_core_get_conference_local_input_volume(LinphoneCore *lc);
-
-LINPHONE_PUBLIC	int linphone_core_terminate_conference(LinphoneCore *lc);
-LINPHONE_PUBLIC	int linphone_core_get_conference_size(LinphoneCore *lc);
+*/
+LINPHONE_PUBLIC bool_t linphone_core_is_in_conference(const LinphoneCore *lc);
+/**
+ * Join the local participant to the running conference
+ * @param lc #LinphoneCore
+ * @return 0 if succeeded. Negative number if failed
+ */
+LINPHONE_PUBLIC int linphone_core_enter_conference(LinphoneCore *lc);
+/**
+ * Make the local participant leave the running conference
+ * @param lc #LinphoneCore
+ * @return 0 if succeeded. Negative number if failed
+ */
+LINPHONE_PUBLIC int linphone_core_leave_conference(LinphoneCore *lc);
+/**
+ * Get the set input volume of the local participant
+ * @param lc #LinphoneCore
+ * @return A value inside [0.0 ; 1.0]
+ */
+LINPHONE_PUBLIC float linphone_core_get_conference_local_input_volume(LinphoneCore *lc);
+/**
+ * Terminate the running conference. If it is a local conference, all calls
+ * inside it will become back separate calls and will be put in #LinphoneCallPaused state.
+ * If it is a conference involving a focus server, all calls inside the conference
+ * will be terminated.
+ * @param lc #LinphoneCore
+ * @return 0 if succeeded. Negative number if failed
+ */
+LINPHONE_PUBLIC int linphone_core_terminate_conference(LinphoneCore *lc);
+/**
+ * Get the number of participant in the running conference. The local
+ * participant is included in the count only if it is in the conference.
+ * @param lc #LinphoneCore
+ * @return The number of participant
+ */
+LINPHONE_PUBLIC int linphone_core_get_conference_size(LinphoneCore *lc);
+/**
+ * Start recording the running conference
+ * @param lc #LinphoneCore
+ * @param path Path to the file where the recording will be written
+ * @return 0 if succeeded. Negative number if failed
+ */
 LINPHONE_PUBLIC int linphone_core_start_conference_recording(LinphoneCore *lc, const char *path);
+/**
+ * Stop recording the running conference
+ * @param #LinphoneCore
+ * @return 0 if succeeded. Negative number if failed
+ */
 LINPHONE_PUBLIC int linphone_core_stop_conference_recording(LinphoneCore *lc);
+/**
+ * Get a pointer on the internal conference object.
+ * @param lc #LinphoneCore
+ * @return A pointer on #LinphoneConference or NULL if no conference are going on
+ */
+LINPHONE_PUBLIC LinphoneConference *linphone_core_get_conference(LinphoneCore *lc);
+
+
+/**
+ * @}
+ */
+
 /**
  * Get the maximum number of simultaneous calls Linphone core can manage at a time. All new call above this limit are declined with a busy answer
  * @ingroup initializing
@@ -4251,6 +4411,11 @@ LINPHONE_PUBLIC LinphoneTransportType linphone_transport_parse(const char* trans
  */
 LINPHONE_PUBLIC LINPHONE_DEPRECATED LinphoneCallParams *linphone_core_create_default_call_parameters(LinphoneCore *lc);
 
+typedef struct _LinphoneRingtonePlayer LinphoneRingtonePlayer;
+
+LINPHONE_PUBLIC LinphoneRingtonePlayer *linphone_core_get_ringtoneplayer(LinphoneCore *lc);
+
+#include "ringtoneplayer.h"
 
 #ifdef __cplusplus
 }
