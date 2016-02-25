@@ -631,6 +631,10 @@ void linphone_friend_list_update_subscriptions(LinphoneFriendList *list, Linphon
 				linphone_content_set_type(content, "application");
 				linphone_content_set_subtype(content, "resource-lists+xml");
 				linphone_content_set_string_buffer(content, xml_content);
+				if (linphone_core_content_encoding_supported(list->lc, "deflate")) {
+					linphone_content_set_encoding(content, "deflate");
+					linphone_event_add_custom_header(list->event, "Accept-Encoding", "deflate");
+				}
 				linphone_event_send_subscribe(list->event, content);
 				linphone_content_unref(content);
 				linphone_event_set_user_data(list->event, list);
@@ -811,7 +815,7 @@ void linphone_friend_list_export_friends_as_vcard4_file(LinphoneFriendList *list
 	FILE *file = NULL;
 	const MSList *friends = linphone_friend_list_get_friends(list);
 	
-	file = fopen(vcard_file, "w");
+	file = fopen(vcard_file, "wb");
 	if (file == NULL) {
 		ms_warning("Could not write %s ! Maybe it is read-only. Contacts will not be saved.", vcard_file);
 		return;

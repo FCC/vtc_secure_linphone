@@ -169,7 +169,7 @@ const LinphoneAddress *linphone_core_get_current_call_remote_address(struct _Lin
 static void linphone_core_log_collection_handler(const char *domain, OrtpLogLevel level, const char *fmt, va_list args);
 
 void linphone_core_set_log_handler(OrtpLogFunc logfunc) {
-	if (ortp_logv_out == linphone_core_log_collection_handler) {
+	if (ortp_get_log_handler() == linphone_core_log_collection_handler) {
 		ms_message("There is already a log collection handler, keep it");
 		liblinphone_log_func = logfunc;
 	} else
@@ -389,7 +389,7 @@ void linphone_core_enable_log_collection(LinphoneLogCollectionState state) {
 	/* at first call of this function, set liblinphone_log_func to the current
 	 * ortp log function */
 	if( liblinphone_log_func == NULL ){
-		liblinphone_log_func = ortp_logv_out;
+		liblinphone_log_func = ortp_get_log_handler();
 	}
 	liblinphone_log_collection_state = state;
 	if (state != LinphoneLogCollectionDisabled) {
@@ -397,7 +397,7 @@ void linphone_core_enable_log_collection(LinphoneLogCollectionState state) {
 		if (state == LinphoneLogCollectionEnabledWithoutPreviousLogHandler) {
 			liblinphone_log_func = NULL;
 		} else {
-			liblinphone_log_func = ortp_logv_out;
+			liblinphone_log_func = ortp_get_log_handler();
 		}
 		ortp_set_log_handler(linphone_core_log_collection_handler);
 	} else {
@@ -2493,6 +2493,12 @@ void linphone_core_enable_ipv6(LinphoneCore *lc, bool_t val){
 }
 
 
+bool_t linphone_core_content_encoding_supported(const LinphoneCore *lc, const char *content_encoding) {
+	const char *handle_content_encoding = lp_config_get_string(lc->config, "sip", "handle_content_encoding", "deflate");
+	return (strcmp(handle_content_encoding, content_encoding) == 0) && sal_content_encoding_available(lc->sal, content_encoding);
+}
+
+
 static void monitor_network_state(LinphoneCore *lc, time_t curtime){
 	bool_t new_status=lc->network_last_status;
 	char newip[LINPHONE_IPADDR_SIZE];
@@ -4068,6 +4074,7 @@ int _linphone_core_pause_call(LinphoneCore *lc, LinphoneCall *call){
 		ms_error("No reason to pause this call, it is already paused or inactive.");
 		return -1;
 	}
+	call->broken = FALSE;
 	linphone_call_set_state(call, LinphoneCallPausing, "Pausing call");
 	linphone_call_make_local_media_description(call);
 #ifdef BUILD_UPNP
@@ -4144,6 +4151,7 @@ int linphone_core_resume_call(LinphoneCore *lc, LinphoneCall *call){
 	}
 
 	call->was_automatically_paused=FALSE;
+	call->broken = FALSE;
 
 	/* Stop playing music immediately. If remote side is a conference it
 	 prevents the participants to hear it while the 200OK comes back.*/
@@ -4965,7 +4973,7 @@ void linphone_core_enable_mic(LinphoneCore *lc, bool_t enable) {
 bool_t linphone_core_mic_enabled(LinphoneCore *lc) {
 	LinphoneCall *call=linphone_core_get_current_call(lc);
 	if (linphone_core_is_in_conference(lc)){
-		return linphone_conference_microphone_is_muted(lc->conf_ctx);
+		return !linphone_conference_microphone_is_muted(lc->conf_ctx);
 	}else if (call==NULL){
 		ms_warning("%s(): No current call!", __FUNCTION__);
 		return TRUE;

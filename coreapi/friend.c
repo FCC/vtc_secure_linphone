@@ -1133,6 +1133,11 @@ void linphone_core_store_friend_in_db(LinphoneCore *lc, LinphoneFriend *lf) {
 			return;
 		}
 		
+		if (!lf || !lf->friend_list) {
+			ms_warning("Either the friend or the friend list is null, skipping...");
+			return;
+		} 
+		
 		if (lf->friend_list->storage_id == 0) {
 			ms_warning("Trying to add a friend in db, but friend list isn't, let's do that first");
 			linphone_core_store_friends_list_in_db(lc, lf->friend_list);
@@ -1341,6 +1346,7 @@ void linphone_core_set_friends_database_path(LinphoneCore *lc, const char *path)
 void linphone_core_migrate_friends_from_rc_to_db(LinphoneCore *lc) {
 	LpConfig *lpc = NULL;
 	LinphoneFriend *lf = NULL;
+	LinphoneFriendList *lfl = linphone_core_get_default_friend_list(lc);
 	int i;
 #ifndef FRIENDS_SQL_STORAGE_ENABLED
 	ms_warning("linphone has been compiled without sqlite, can't migrate friends");
@@ -1362,8 +1368,12 @@ void linphone_core_migrate_friends_from_rc_to_db(LinphoneCore *lc) {
 	
 	for (i = 0; (lf = linphone_friend_new_from_config_file(lc, i)) != NULL; i++) {
 		char friend_section[32];
+		
+		if (!linphone_friend_create_vcard(lf, linphone_address_get_username(linphone_friend_get_address(lf)))) {
+			ms_warning("Couldn't create vCard for friend %s", linphone_address_as_string(linphone_friend_get_address(lf)));
+		}
 			
-		linphone_core_add_friend(lc, lf);
+		linphone_friend_list_add_friend(lfl, lf);
 		linphone_friend_unref(lf);
 		
 		snprintf(friend_section, sizeof(friend_section), "friend_%i", i);
