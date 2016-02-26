@@ -1383,3 +1383,4 @@ void linphone_core_migrate_friends_from_rc_to_db(LinphoneCore *lc) {
 	ms_debug("friends migration successful: %i friends migrated", i);
 	lp_config_set_int(lpc, "misc", "friends_migration_done", 1);
 }
+
