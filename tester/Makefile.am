@@ -74,6 +74,7 @@ RCFILES = \
 
 IMAGE_FILES = images/nowebcamCIF.jpg
 
+
 COMMON_FILE = common/bc_completion common/vcards.vcf common/thousand_vcards.vcf
 
 EXTRA_DIST = tester_hosts\
@@ -82,8 +83,7 @@ EXTRA_DIST = tester_hosts\
 			$(SIPP_FILES)\
 			$(CERTIFICATE_FILES)\
 			$(RCFILES)\
-			$(IMAGE_FILES)\
-			$(COMMON_FILE)
+			$(IMAGE_FILES)
 
 
 
@@ -138,10 +138,10 @@ liblinphonetester_la_SOURCES = \
 				upnp_tester.c \
 				video_tester.c \
 				vcard_tester.c \
-				common/bc_tester_utils.c
+				common/bc_tester_utils.c \
+				video_tester.c
 
 liblinphonetester_ladir = $(includedir)/linphone
-liblinphonetester_la_HEADERS = common/bc_tester_utils.h
 
 liblinphonetester_la_LDFLAGS= -no-undefined
 liblinphonetester_la_LIBADD= ../coreapi/liblinphone.la $(CUNIT_LIBS)
