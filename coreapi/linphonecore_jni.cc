@@ -3270,7 +3270,7 @@ static void contact_created(LinphoneFriendList *list, LinphoneFriend *lf) {
 	jclass clazz = (jclass) env->GetObjectClass(listener);
 	jmethodID method = env->GetMethodID(clazz, "onLinphoneFriendCreated","(Lorg/linphone/core/LinphoneFriendList;Lorg/linphone/core/LinphoneFriend;)V");
 	jobject jlist = getFriendList(env, list);
-	jobject jfriend = getFriend(env, lf);
+	jobject jfriend = getFriend(env, lf, NULL);
 	env->DeleteLocalRef(clazz);
 	env->CallVoidMethod(listener, method, jlist, jfriend);
 }
@@ -3293,8 +3293,8 @@ static void contact_updated(LinphoneFriendList *list, LinphoneFriend *lf_new, Li
 	jclass clazz = (jclass) env->GetObjectClass(listener);
 	jmethodID method = env->GetMethodID(clazz, "onLinphoneFriendUpdated","(Lorg/linphone/core/LinphoneFriendList;Lorg/linphone/core/LinphoneFriend;Lorg/linphone/core/LinphoneFriend;)V");
 	jobject jlist = getFriendList(env, list);
-	jobject jfriend_new = getFriend(env, lf_new);
-	jobject jfriend_old = getFriend(env, lf_old);
+	jobject jfriend_new = getFriend(env, lf_new, NULL);
+	jobject jfriend_old = getFriend(env, lf_old, NULL);
 	env->DeleteLocalRef(clazz);
 	env->CallVoidMethod(listener, method, jlist, jfriend_new, jfriend_old);
 }
@@ -3317,7 +3317,7 @@ static void contact_removed(LinphoneFriendList *list, LinphoneFriend *lf) {
 	jclass clazz = (jclass) env->GetObjectClass(listener);
 	jmethodID method = env->GetMethodID(clazz, "onLinphoneFriendDeleted","(Lorg/linphone/core/LinphoneFriendList;Lorg/linphone/core/LinphoneFriend;)V");
 	jobject jlist = getFriendList(env, list);
-	jobject jfriend = getFriend(env, lf);
+	jobject jfriend = getFriend(env, lf, NULL);
 	env->DeleteLocalRef(clazz);
 	env->CallVoidMethod(listener, method, jlist, jfriend);
 }
@@ -3423,7 +3423,7 @@ extern "C" jobjectArray Java_org_linphone_core_LinphoneFriendListImpl_getFriendL
 
 	for (int i = 0; i < friendsSize; i++) {
 		LinphoneFriend* lfriend = (LinphoneFriend*)friends->data;
-		jobject jfriend =  getFriend(env,lfriend);
+		jobject jfriend =  getFriend(env,lfriend, NULL);
 		if(jfriend != NULL){
 			env->SetObjectArrayElement(jFriends, i, jfriend);
 		}
