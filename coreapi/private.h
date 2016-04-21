@@ -1288,7 +1288,6 @@ struct _LinphoneCardDavQuery {
 };
 
 struct _LinphoneCardDavResponse {
-	LinphoneCardDavContext *context;
 	const char *etag;
 	const char *url;
 	const char *vcard;
