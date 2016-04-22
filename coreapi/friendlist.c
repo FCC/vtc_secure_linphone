@@ -465,7 +465,7 @@ static LinphoneFriendListStatus _linphone_friend_list_remove_friend(LinphoneFrie
 			}
 		}
 	}
-	
+
 	lf->friend_list = NULL;
 	linphone_friend_unref(lf);
 	list->friends = ms_list_remove_link(list->friends, elem);
