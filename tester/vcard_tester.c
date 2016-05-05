@@ -23,6 +23,8 @@
 
 #include <time.h>
 
+#define CARDDAV_SERVER "http://dav.linphone.org/card.php/addressbooks/tester/default"
+
 #ifdef VCARD_ENABLED
 static char *create_filepath(const char *dir, const char *filename, const char *ext) {
 	return ms_strdup_printf("%s/%s.%s", dir, filename, ext);
@@ -32,25 +34,25 @@ static void linphone_vcard_import_export_friends_test(void) {
 	LinphoneCoreManager* manager = linphone_core_manager_new2("empty_rc", FALSE);
 	LinphoneFriendList *lfl = linphone_core_get_default_friend_list(manager->lc);
 	const MSList *friends = linphone_friend_list_get_friends(lfl);
-	char *import_filepath = bc_tester_res("common/vcards.vcf");
+	char *import_filepath = bc_tester_res("vcards/vcards.vcf");
 	char *export_filepath = create_filepath(bc_tester_get_writable_dir_prefix(), "export_vcards", "vcf");
 	int count = 0;
 	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
-	
+
 	count = linphone_friend_list_import_friends_from_vcard4_file(lfl, import_filepath);
 	BC_ASSERT_EQUAL(count, 3, int, "%d");
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 3, int, "%d");
-	
+
 	linphone_friend_list_export_friends_as_vcard4_file(lfl, export_filepath);
-	
+
 	lfl = linphone_core_create_friend_list(manager->lc);
 	count = linphone_friend_list_import_friends_from_vcard4_file(lfl, export_filepath);
 	BC_ASSERT_EQUAL(count, 3, int, "%d");
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 3, int, "%d");
 	linphone_friend_list_unref(lfl);
-	
+
 	remove(export_filepath);
 	ms_free(import_filepath);
 	ms_free(export_filepath);
@@ -60,74 +62,144 @@ static void linphone_vcard_import_export_friends_test(void) {
 static void linphone_vcard_import_a_lot_of_friends_test(void) {
 	LinphoneCoreManager* manager = linphone_core_manager_new2("empty_rc", FALSE);
 	LinphoneFriendList *lfl = linphone_core_get_default_friend_list(manager->lc);
-	char *import_filepath = bc_tester_res("common/thousand_vcards.vcf");
+	char *import_filepath = bc_tester_res("vcards/thousand_vcards.vcf");
 	clock_t start, end;
 	double elapsed = 0;
 	const MSList *friends = NULL;
-	FILE    *infile;
-	char    *buffer;
-	long    numbytes;
+	FILE    *infile = NULL;
+	char    *buffer = NULL;
+	long    numbytes = 0;
 
 	start = clock();
 	linphone_friend_list_import_friends_from_vcard4_file(lfl, import_filepath);
 	end = clock();
-	
+
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 482, int, "%i"); // Thousand vcards contains 482 contacts with a SIP URI
-	
+
 	elapsed = (double)(end - start);
 	ms_error("Imported a thousand of vCards from file (only %i friends with SIP address found) in %f seconds", ms_list_size(friends), elapsed / CLOCKS_PER_SEC);
-#ifndef ANDROID
-	BC_ASSERT_TRUE(elapsed < 1500000); // 1.5 seconds
-#endif
-	
+
 	lfl = linphone_core_create_friend_list(manager->lc);
-	infile = fopen(import_filepath, "r");
-	fseek(infile, 0L, SEEK_END);
-	numbytes = ftell(infile);
-	fseek(infile, 0L, SEEK_SET);
-	buffer = (char*)ms_malloc(numbytes * sizeof(char));
-	numbytes = fread(buffer, sizeof(char), numbytes, infile);
-	fclose(infile);
-	
-	start = clock();
-	linphone_friend_list_import_friends_from_vcard4_buffer(lfl, buffer);
-	end = clock();
-	
+	infile = fopen(import_filepath, "rb");
+	BC_ASSERT_PTR_NOT_NULL(infile);
+	if (infile) {
+		fseek(infile, 0L, SEEK_END);
+		numbytes = ftell(infile);
+		fseek(infile, 0L, SEEK_SET);
+		buffer = (char*)ms_malloc(numbytes * sizeof(char));
+		numbytes = fread(buffer, sizeof(char), numbytes, infile);
+		fclose(infile);
+
+		start = clock();
+		linphone_friend_list_import_friends_from_vcard4_buffer(lfl, buffer);
+		end = clock();
+		ms_free(buffer);
+	}
+
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 482, int, "%i"); // Thousand vcards contains 482 contacts with a SIP URI
-	
+
 	elapsed = (double)(end - start);
 	ms_error("Imported a thousand of vCards from buffer (only %i friends with SIP address found) in %f seconds", ms_list_size(friends), elapsed / CLOCKS_PER_SEC);
-#ifndef ANDROID
-	BC_ASSERT_TRUE(elapsed < 1500000); // 1.5 seconds
-#endif
-	
-	ms_free(buffer);
+
 	linphone_friend_list_unref(lfl);
-	
+
 	ms_free(import_filepath);
 	linphone_core_manager_destroy(manager);
 }
 
+static void linphone_vcard_update_existing_friends_test(void) {
+	LinphoneFriend *lf = linphone_friend_new_with_addr("sip:oldfriend@sip.linphone.org");
+
+	BC_ASSERT_PTR_NOT_NULL_FATAL(lf);
+	BC_ASSERT_PTR_NULL(linphone_friend_get_vcard(lf));
+
+	linphone_friend_edit(lf);
+	linphone_friend_set_name(lf, "Old Friend");
+	linphone_friend_done(lf);
+
+	BC_ASSERT_PTR_NOT_NULL(linphone_friend_get_vcard(lf));
+	BC_ASSERT_STRING_EQUAL(linphone_vcard_get_full_name(linphone_friend_get_vcard(lf)), "Old Friend");
+	linphone_friend_unref(lf);
+	lf = NULL;
+}
+
+static void linphone_vcard_phone_numbers_and_sip_addresses(void) {
+	LinphoneVcard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Sylvain Berfini\r\nIMPP:sip:sberfini@sip.linphone.org\r\nIMPP;TYPE=home:sip:sylvain@sip.linphone.org\r\nTEL;TYPE=work:0952636505\r\nEND:VCARD\r\n");
+	LinphoneFriend *lf = linphone_friend_new_from_vcard(lvc);
+	MSList *sip_addresses = linphone_friend_get_addresses(lf);
+	MSList *phone_numbers = linphone_friend_get_phone_numbers(lf);
+	LinphoneAddress *addr = NULL;
+	
+	BC_ASSERT_EQUAL(ms_list_size(sip_addresses), 2, int, "%i");
+	BC_ASSERT_EQUAL(ms_list_size(phone_numbers), 1, int, "%i");
+	if (sip_addresses) ms_list_free_with_data(sip_addresses, (void (*)(void *))linphone_address_unref);
+	if (phone_numbers) ms_list_free(phone_numbers);
+	linphone_friend_unref(lf);
+	
+	lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Sylvain Berfini\r\nTEL;TYPE=work:0952636505\r\nTEL:0476010203\r\nEND:VCARD\r\n");
+	lf = linphone_friend_new_from_vcard(lvc);
+	sip_addresses = linphone_friend_get_addresses(lf);
+	phone_numbers = linphone_friend_get_phone_numbers(lf);
+	
+	BC_ASSERT_EQUAL(ms_list_size(sip_addresses), 0, int, "%i");
+	BC_ASSERT_EQUAL(ms_list_size(phone_numbers), 2, int, "%i");
+	if (sip_addresses) ms_list_free_with_data(sip_addresses, (void (*)(void *))linphone_address_unref);
+	if (phone_numbers) ms_list_free(phone_numbers);
+	
+	addr = linphone_address_new("sip:sylvain@sip.linphone.org");
+	linphone_friend_add_address(lf, addr);
+	linphone_address_unref(addr);
+	sip_addresses = linphone_friend_get_addresses(lf);
+	BC_ASSERT_EQUAL(ms_list_size(sip_addresses), 1, int, "%i");
+	if (sip_addresses) ms_list_free_with_data(sip_addresses, (void (*)(void *))linphone_address_unref);
+	
+	linphone_friend_remove_phone_number(lf, "0952636505");
+	phone_numbers = linphone_friend_get_phone_numbers(lf);
+	BC_ASSERT_EQUAL(ms_list_size(phone_numbers), 1, int, "%i");
+	if (phone_numbers) ms_list_free(phone_numbers);
+	
+	linphone_friend_remove_phone_number(lf, "0476010203");
+	phone_numbers = linphone_friend_get_phone_numbers(lf);
+	BC_ASSERT_EQUAL(ms_list_size(phone_numbers), 0, int, "%i");
+	if (phone_numbers) ms_list_free(phone_numbers);
+	
+	addr = linphone_address_new("sip:sylvain@sip.linphone.org");
+	linphone_friend_remove_address(lf, addr);
+	linphone_address_unref(addr);
+	sip_addresses = linphone_friend_get_addresses(lf);
+	BC_ASSERT_EQUAL(ms_list_size(sip_addresses), 0, int, "%i");
+	if (sip_addresses) ms_list_free_with_data(sip_addresses, (void (*)(void *))linphone_address_unref);
+	
+	linphone_friend_add_phone_number(lf, "+33952636505");
+	phone_numbers = linphone_friend_get_phone_numbers(lf);
+	BC_ASSERT_EQUAL(ms_list_size(phone_numbers), 1, int, "%i");
+	if (phone_numbers) ms_list_free(phone_numbers);
+	
+	linphone_friend_unref(lf);
+	lf = NULL;
+	lvc = NULL;
+}
+
 static void friends_if_no_db_set(void) {
 	LinphoneCoreManager* manager = linphone_core_manager_new2("empty_rc", FALSE);
-	LinphoneFriend *lf = linphone_friend_new();
+	LinphoneFriend *lf = linphone_core_create_friend(manager->lc);
 	LinphoneAddress *addr = linphone_address_new("sip:sylvain@sip.linphone.org");
 	const MSList *friends = NULL;
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
-	
+
 	linphone_friend_set_address(lf, addr);
 	linphone_friend_set_name(lf, "Sylvain");
 	linphone_friend_list_add_friend(lfl, lf);
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 1, int, "%d");
-	
+
 	linphone_friend_list_remove_friend(lfl, lf);
 	linphone_friend_unref(lf);
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
-	
+
 	linphone_friend_list_unref(lfl);
 	linphone_address_unref(addr);
 	linphone_core_manager_destroy(manager);
@@ -136,19 +208,23 @@ static void friends_if_no_db_set(void) {
 #ifdef FRIENDS_SQL_STORAGE_ENABLED
 static void friends_migration(void) {
 	LinphoneCoreManager* manager = linphone_core_manager_new2("friends_rc", FALSE);
+	LpConfig *lpc = linphone_core_get_config(manager->lc);
 	LinphoneFriendList *lfl = linphone_core_get_default_friend_list(manager->lc);
 	const MSList *friends = linphone_friend_list_get_friends(lfl);
 	MSList *friends_from_db = NULL;
 	char *friends_db = create_filepath(bc_tester_get_writable_dir_prefix(), "friends", "db");
-	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
-	
+	BC_ASSERT_EQUAL(ms_list_size(friends), 3, int, "%d");
+	BC_ASSERT_EQUAL(lp_config_get_int(lpc, "misc", "friends_migration_done", 0), 0, int, "%i");
+
 	unlink(friends_db);
 	linphone_core_set_friends_database_path(manager->lc, friends_db);
+	lfl = linphone_core_get_default_friend_list(manager->lc);
 	friends = linphone_friend_list_get_friends(lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 3, int, "%d");
 	friends_from_db = linphone_core_fetch_friends_from_db(manager->lc, lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends_from_db), 3, int, "%d");
-	
+	BC_ASSERT_EQUAL(lp_config_get_int(lpc, "misc", "friends_migration_done", 0), 1, int, "%i");
+
 	friends_from_db = ms_list_free_with_data(friends_from_db, (void (*)(void *))linphone_friend_unref);
 	unlink(friends_db);
 	ms_free(friends_db);
@@ -162,12 +238,16 @@ typedef struct _LinphoneFriendListStats {
 
 static void friend_list_created_cb(LinphoneCore *lc, LinphoneFriendList *list) {
 	LinphoneFriendListStats *stats = (LinphoneFriendListStats *)linphone_friend_list_get_user_data(list);
-	stats->new_list_count++;
+	if (stats) {
+		stats->new_list_count++;
+	}
 }
 
 static void friend_list_removed_cb(LinphoneCore *lc, LinphoneFriendList *list) {
 	LinphoneFriendListStats *stats = (LinphoneFriendListStats *)linphone_friend_list_get_user_data(list);
-	stats->removed_list_count++;
+	if (stats) {
+		stats->removed_list_count++;
+	}
 }
 
 static void friends_sqlite_storage(void) {
@@ -176,14 +256,14 @@ static void friends_sqlite_storage(void) {
 	LinphoneFriendList *lfl = NULL;
 	LinphoneFriend *lf = NULL;
 	LinphoneFriend *lf2 = NULL;
-	LinphoneVCard *lvc = linphone_vcard_new();
+	LinphoneVcard *lvc = linphone_vcard_new();
 	LinphoneAddress *addr = linphone_address_new("sip:sylvain@sip.linphone.org");
 	const MSList *friends = NULL;
 	MSList *friends_from_db = NULL;
 	MSList *friends_lists_from_db = NULL;
 	char *friends_db = create_filepath(bc_tester_get_writable_dir_prefix(), "friends", "db");
 	LinphoneFriendListStats *stats = (LinphoneFriendListStats *)ms_new0(LinphoneFriendListStats, 1);
-	
+
 	v_table->friend_list_created = friend_list_created_cb;
 	v_table->friend_list_removed = friend_list_removed_cb;
 	lc = linphone_core_new(v_table, NULL, NULL, NULL);
@@ -191,18 +271,18 @@ static void friends_sqlite_storage(void) {
 	lfl = linphone_core_create_friend_list(lc);
 	linphone_friend_list_set_user_data(lfl, stats);
 	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
-	
+
 	unlink(friends_db);
 	linphone_core_set_friends_database_path(lc, friends_db);
 	friends_from_db = linphone_core_fetch_friends_from_db(lc, linphone_core_get_default_friend_list(lc));
 	BC_ASSERT_EQUAL(ms_list_size(friends_from_db), 0, int, "%d");
-	
+
 	linphone_vcard_set_etag(lvc, "\"123-456789\"");
 	linphone_vcard_set_url(lvc, "http://dav.somewhere.fr/addressbook/me/someone.vcf");
 	lf = linphone_friend_new_from_vcard(lvc);
 	linphone_friend_set_address(lf, addr);
 	linphone_friend_set_name(lf, "Sylvain");
-	
+
 	linphone_core_add_friend_list(lc, lfl);
 	wait_for_until(lc, NULL, &stats->new_list_count, 1, 1000);
 	BC_ASSERT_EQUAL(stats->new_list_count, 1, int, "%i");
@@ -212,10 +292,10 @@ static void friends_sqlite_storage(void) {
 	linphone_friend_unref(lf);
 	BC_ASSERT_EQUAL(lfl->storage_id, 1, int, "%d");
 	BC_ASSERT_EQUAL(lf->storage_id, 1, int, "%d");
-	
+
 	friends = linphone_friend_list_get_friends(linphone_core_get_default_friend_list(lc));
 	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
-	
+
 	friends_lists_from_db = linphone_core_fetch_friends_lists_from_db(lc);
 	BC_ASSERT_EQUAL(ms_list_size(friends_lists_from_db), 1, int, "%d");
 	friends_from_db = ((LinphoneFriendList *)friends_lists_from_db->data)->friends;
@@ -224,7 +304,7 @@ static void friends_sqlite_storage(void) {
 	BC_ASSERT_PTR_NOT_NULL(lf2->lc);
 	BC_ASSERT_PTR_NOT_NULL(lf2->friend_list);
 	friends_lists_from_db = ms_list_free_with_data(friends_lists_from_db, (void (*)(void *))linphone_friend_list_unref);
-	
+
 	friends_from_db = linphone_core_fetch_friends_from_db(lc, lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends_from_db), 1, int, "%d");
 	if (ms_list_size(friends_from_db) < 1) {
@@ -249,18 +329,19 @@ static void friends_sqlite_storage(void) {
 	lf2 = (LinphoneFriend *)friends_from_db->data;
 	BC_ASSERT_STRING_EQUAL(linphone_friend_get_name(lf2), "Margaux");
 	friends_from_db = ms_list_free_with_data(friends_from_db, (void (*)(void *))linphone_friend_unref);
-	
+
 	linphone_friend_list_remove_friend(lfl, lf);
 	friends = linphone_friend_list_get_friends(linphone_core_get_default_friend_list(lc));
 	BC_ASSERT_EQUAL(ms_list_size(friends), 0, int, "%d");
 	friends_from_db = linphone_core_fetch_friends_from_db(lc, lfl);
 	BC_ASSERT_EQUAL(ms_list_size(friends_from_db), 0, int, "%d");
-	
+
 	linphone_core_remove_friend_list(lc, lfl);
 	wait_for_until(lc, NULL, &stats->removed_list_count, 1, 1000);
 	BC_ASSERT_EQUAL(stats->removed_list_count, 1, int, "%i");
 
 end:
+	ms_free(stats);
 	unlink(friends_db);
 	ms_free(friends_db);
 	linphone_address_unref(addr);
@@ -305,25 +386,25 @@ static void carddav_sync(void) {
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
 	LinphoneCardDavContext *c = NULL;
-	
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	linphone_core_add_friend_list(manager->lc, lfl);
 	linphone_friend_list_unref(lfl);
 	c = linphone_carddav_context_new(lfl);
 	BC_ASSERT_PTR_NOT_NULL_FATAL(c);
-	
+
 	linphone_carddav_set_user_data(c, stats);
 	linphone_carddav_set_synchronization_done_callback(c, carddav_sync_done);
 	linphone_carddav_set_new_contact_callback(c, carddav_new_contact);
 	linphone_carddav_set_removed_contact_callback(c, carddav_removed_contact);
 	linphone_carddav_set_updated_contact_callback(c, carddav_updated_contact);
 	linphone_carddav_synchronize(c);
-	
-	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 1, 2000);
+
+	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->new_contact_count, 1, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
-	
+
 	ms_free(stats);
 	linphone_carddav_context_destroy(c);
 	linphone_core_manager_destroy(manager);
@@ -332,37 +413,37 @@ static void carddav_sync(void) {
 static void carddav_sync_2(void) {
 	LinphoneCoreManager *manager = linphone_core_manager_new2("carddav_rc", FALSE);
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
-	LinphoneFriend *lf = linphone_friend_new_with_address("\"Sylvain\" <sip:sylvain@sip.linphone.org>");
+	LinphoneFriend *lf = linphone_core_create_friend_with_address(manager->lc, "\"Sylvain\" <sip:sylvain@sip.linphone.org>");
 	char *friends_db = create_filepath(bc_tester_get_writable_dir_prefix(), "friends", "db");
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
 	LinphoneCardDavContext *c = NULL;
-	
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	linphone_core_add_friend_list(manager->lc, lfl);
 	linphone_friend_list_unref(lfl);
 	c = linphone_carddav_context_new(lfl);
 	BC_ASSERT_PTR_NOT_NULL_FATAL(c);
-	
+
 	unlink(friends_db);
 	linphone_core_set_friends_database_path(manager->lc, friends_db);
-	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
+	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_local_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
 	linphone_friend_unref(lf);
-	
+
 	linphone_carddav_set_user_data(c, stats);
 	linphone_carddav_set_synchronization_done_callback(c, carddav_sync_done);
 	linphone_carddav_set_new_contact_callback(c, carddav_new_contact);
 	linphone_carddav_set_removed_contact_callback(c, carddav_removed_contact);
 	linphone_carddav_set_updated_contact_callback(c, carddav_updated_contact);
-	
+
 	linphone_carddav_synchronize(c);
-	
-	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 1, 2000);
+
+	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->new_contact_count, 1, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->removed_contact_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->removed_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->removed_contact_count, 1, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
-	
+
 	ms_free(stats);
 	unlink(friends_db);
 	ms_free(friends_db);
@@ -373,71 +454,72 @@ static void carddav_sync_2(void) {
 static void carddav_sync_3(void) {
 	LinphoneCoreManager *manager = linphone_core_manager_new2("carddav_rc", FALSE);
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
-	LinphoneVCard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nUID:1f08dd48-29ac-4097-8e48-8596d7776283\r\nFN:Sylvain Berfini\r\nIMPP;TYPE=work:sip:sylvain@sip.linphone.org\r\nEND:VCARD\r\n");
+	LinphoneVcard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nUID:1f08dd48-29ac-4097-8e48-8596d7776283\r\nFN:Sylvain Berfini\r\nIMPP;TYPE=work:sip:sylvain@sip.linphone.org\r\nEND:VCARD\r\n");
 	LinphoneFriend *lf = linphone_friend_new_from_vcard(lvc);
 	char *friends_db = create_filepath(bc_tester_get_writable_dir_prefix(), "friends", "db");
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
 	LinphoneCardDavContext *c = NULL;
-	
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	linphone_core_add_friend_list(manager->lc, lfl);
 	linphone_friend_list_unref(lfl);
 	c = linphone_carddav_context_new(lfl);
 	BC_ASSERT_PTR_NOT_NULL_FATAL(c);
-	
+
 	unlink(friends_db);
 	linphone_core_set_friends_database_path(manager->lc, friends_db);
-	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
+    BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_local_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
 	linphone_friend_unref(lf);
-	
+
 	linphone_carddav_set_user_data(c, stats);
 	linphone_carddav_set_synchronization_done_callback(c, carddav_sync_done);
 	linphone_carddav_set_new_contact_callback(c, carddav_new_contact);
 	linphone_carddav_set_removed_contact_callback(c, carddav_removed_contact);
 	linphone_carddav_set_updated_contact_callback(c, carddav_updated_contact);
-	
+
 	linphone_carddav_synchronize(c);
-	
-	wait_for_until(manager->lc, NULL, &stats->updated_contact_count, 1, 2000);
+
+	wait_for_until(manager->lc, NULL, &stats->updated_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->updated_contact_count, 1, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
 
 	ms_free(stats);
 	unlink(friends_db);
 	ms_free(friends_db);
 	linphone_carddav_context_destroy(c);
+	c = NULL;
 	linphone_core_manager_destroy(manager);
 }
 
 static void carddav_sync_4(void) {
 	LinphoneCoreManager *manager = linphone_core_manager_new2("carddav_rc", FALSE);
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
-	LinphoneVCard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Margaux Clerc\r\nIMPP;TYPE=work:sip:margaux@sip.linphone.org\r\nEND:VCARD\r\n");
+	LinphoneVcard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Margaux Clerc\r\nIMPP;TYPE=work:sip:margaux@sip.linphone.org\r\nEND:VCARD\r\n");
 	LinphoneFriend *lf = linphone_friend_new_from_vcard(lvc);
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
 	LinphoneCardDavContext *c = NULL;
-	
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	linphone_core_add_friend_list(manager->lc, lfl);
 	linphone_friend_list_unref(lfl);
 	c = linphone_carddav_context_new(lfl);
 	BC_ASSERT_PTR_NOT_NULL_FATAL(c);
-	
+
 	linphone_carddav_set_user_data(c, stats);
 	linphone_carddav_set_synchronization_done_callback(c, carddav_sync_done);
 	linphone_carddav_set_new_contact_callback(c, carddav_new_contact);
 	linphone_carddav_set_removed_contact_callback(c, carddav_removed_contact);
 	linphone_carddav_set_updated_contact_callback(c, carddav_updated_contact);
-	
-	BC_ASSERT_PTR_NULL(linphone_vcard_get_uid(lvc));	
+
+	BC_ASSERT_PTR_NULL(linphone_vcard_get_uid(lvc));
 	linphone_carddav_put_vcard(c, lf);
 	BC_ASSERT_PTR_NOT_NULL(linphone_vcard_get_uid(lvc));
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
-	
+
 	linphone_carddav_delete_vcard(c, lf);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 2, int, "%i");
 
 	linphone_friend_unref(lf);
@@ -474,15 +556,15 @@ static void carddav_sync_status_changed(LinphoneFriendList *list, LinphoneFriend
 static void carddav_integration(void) {
 	LinphoneCoreManager *manager = linphone_core_manager_new2("carddav_rc", FALSE);
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
-	LinphoneVCard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Margaux Clerc\r\nIMPP;TYPE=work:sip:margaux@sip.linphone.org\r\nEND:VCARD\r\n");
+	LinphoneVcard *lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Margaux Clerc\r\nIMPP;TYPE=work:sip:margaux@sip.linphone.org\r\nEND:VCARD\r\n");
 	LinphoneFriend *lf = linphone_friend_new_from_vcard(lvc);
-	LinphoneVCard *lvc2 = NULL;
+	LinphoneVcard *lvc2 = NULL;
 	LinphoneFriend *lf2 = NULL;
 	LinphoneFriendListCbs *cbs = NULL;
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
 	const char *refkey = "toto";
-	
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	cbs = linphone_friend_list_get_callbacks(lfl);
 	linphone_friend_list_cbs_set_user_data(cbs, stats);
 	linphone_friend_list_cbs_set_contact_created(cbs, carddav_contact_created);
@@ -495,13 +577,13 @@ static void carddav_integration(void) {
 	BC_ASSERT_EQUAL(ms_list_size(lfl->dirty_friends_to_update), 0, int, "%d");
 	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
 	BC_ASSERT_EQUAL(ms_list_size(lfl->dirty_friends_to_update), 1, int, "%d");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
 	BC_ASSERT_EQUAL(ms_list_size(lfl->dirty_friends_to_update), 0, int, "%d");
 	BC_ASSERT_PTR_NOT_NULL(linphone_vcard_get_uid(lvc));
 	linphone_friend_list_remove_friend(lfl, lf);
 	BC_ASSERT_EQUAL(ms_list_size(lfl->friends), 0, int, "%d");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 2, int, "%i");
 	linphone_friend_unref(lf);
 	lf = NULL;
@@ -510,42 +592,42 @@ static void carddav_integration(void) {
 	lf = linphone_friend_new_from_vcard(lvc);
 	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_local_friend(lfl, lf), LinphoneFriendListOK, int, "%d");
 	linphone_friend_unref(lf);
-	
+
 	lvc2 = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Sylvain Berfini\r\nIMPP:sip:sberfini@sip.linphone.org\r\nUID:1f08dd48-29ac-4097-8e48-8596d7776283\r\nEND:VCARD\r\n");
-	linphone_vcard_set_url(lvc2, "/sabredav/addressbookserver.php/addressbooks/sylvain/default/me.vcf");
+	linphone_vcard_set_url(lvc2, "/card.php/addressbooks/tester/default/me.vcf");
 	lf2 = linphone_friend_new_from_vcard(lvc2);
 	linphone_friend_set_ref_key(lf2, refkey);
 	BC_ASSERT_EQUAL_FATAL(linphone_friend_list_add_local_friend(lfl, lf2), LinphoneFriendListOK, int, "%d");
-	
+
 	BC_ASSERT_EQUAL(lfl->revision, 0, int, "%i");
 	linphone_friend_list_synchronize_friends_from_server(lfl);
-	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 0, 2000);
+	wait_for_until(manager->lc, NULL, &stats->new_contact_count, 0, 5000);
 	BC_ASSERT_EQUAL(stats->new_contact_count, 0, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->removed_contact_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->removed_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->removed_contact_count, 1, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->updated_contact_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->updated_contact_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->updated_contact_count, 1, int, "%i");
 	BC_ASSERT_NOT_EQUAL(lfl->revision, 0, int, "%i");
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 3, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 3, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 3, int, "%i");
-	
+
 	BC_ASSERT_EQUAL_FATAL(ms_list_size(lfl->friends), 1, int, "%i");
 	lf = (LinphoneFriend *)lfl->friends->data;
 	BC_ASSERT_STRING_EQUAL(lf->refkey, refkey);
 	BC_ASSERT_EQUAL(lf->storage_id, lf2->storage_id, int, "%i");
 	linphone_friend_unref(lf2);
 	BC_ASSERT_STRING_EQUAL(linphone_address_as_string_uri_only(lf->uri), "sip:sylvain@sip.linphone.org");
-	
+
 	linphone_friend_edit(lf);
 	linphone_friend_done(lf);
 	BC_ASSERT_EQUAL(ms_list_size(lf->friend_list->dirty_friends_to_update), 0, int, "%i");
-	
+
 	linphone_core_set_network_reachable(manager->lc, FALSE); //To prevent the CardDAV update
 	linphone_friend_edit(lf);
 	linphone_friend_set_name(lf, "François Grisez");
 	linphone_friend_done(lf);
 	BC_ASSERT_EQUAL(ms_list_size(lf->friend_list->dirty_friends_to_update), 1, int, "%i");
-	
+
 	ms_free(stats);
 	linphone_friend_list_unref(lfl);
 	linphone_core_manager_destroy(manager);
@@ -557,40 +639,43 @@ static void carddav_clean(void) {  // This is to ensure the content of the test 
 	LinphoneFriendListCbs *cbs = linphone_friend_list_get_callbacks(lfl);
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
 	MSList *friends = NULL;
+	MSList *friends_iterator = NULL;
 	LinphoneFriend *lf = NULL;
-	LinphoneVCard *lvc = NULL;
-	
+	LinphoneVcard *lvc = NULL;
+
 	linphone_friend_list_cbs_set_user_data(cbs, stats);
 	linphone_friend_list_cbs_set_contact_created(cbs, carddav_contact_created);
 	linphone_friend_list_cbs_set_contact_deleted(cbs, carddav_contact_deleted);
 	linphone_friend_list_cbs_set_contact_updated(cbs, carddav_contact_updated);
 	linphone_friend_list_cbs_set_sync_status_changed(cbs, carddav_sync_status_changed);
 	linphone_core_add_friend_list(manager->lc, lfl);
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
-	
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
+
 	linphone_friend_list_synchronize_friends_from_server(lfl);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
 	stats->sync_done_count = 0;
-	
+
 	friends = ms_list_copy(lfl->friends);
-	while (friends) {
-		LinphoneFriend *lf = (LinphoneFriend *)friends->data;
+	friends_iterator = friends;
+	while (friends_iterator) {
+		LinphoneFriend *lf = (LinphoneFriend *)friends_iterator->data;
 		linphone_friend_list_remove_friend(lfl, lf);
-		wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+		wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 		BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
 		stats->sync_done_count = 0;
 		stats->removed_contact_count = 0;
-		friends = ms_list_next(friends);
+		friends_iterator = ms_list_next(friends_iterator);
 	}
-	
+	ms_list_free(friends);
+
 	lvc = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Sylvain Berfini\r\nIMPP:sip:sylvain@sip.linphone.org\r\nUID:1f08dd48-29ac-4097-8e48-8596d7776283\r\nEND:VCARD\r\n");
-	linphone_vcard_set_url(lvc, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default/me.vcf");
+	linphone_vcard_set_url(lvc, "http://dav.linphone.org/card.php/addressbooks/tester/default/me.vcf");
 	lf = linphone_friend_new_from_vcard(lvc);
 	linphone_friend_list_add_friend(lfl, lf);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
-	
+
 	ms_free(stats);
 	linphone_friend_unref(lf);
 	linphone_friend_list_unref(lfl);
@@ -602,6 +687,40 @@ static void carddav_multiple_sync(void) {
 	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
 	LinphoneFriendListCbs *cbs = linphone_friend_list_get_callbacks(lfl);
 	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
+
+	linphone_friend_list_cbs_set_user_data(cbs, stats);
+	linphone_friend_list_cbs_set_contact_created(cbs, carddav_contact_created);
+	linphone_friend_list_cbs_set_contact_deleted(cbs, carddav_contact_deleted);
+	linphone_friend_list_cbs_set_contact_updated(cbs, carddav_contact_updated);
+	linphone_friend_list_cbs_set_sync_status_changed(cbs, carddav_sync_status_changed);
+	linphone_core_add_friend_list(manager->lc, lfl);
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
+
+	linphone_friend_list_synchronize_friends_from_server(lfl);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 5000);
+	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
+	linphone_friend_list_synchronize_friends_from_server(lfl);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 5000);
+	BC_ASSERT_EQUAL(stats->sync_done_count, 2, int, "%i");
+	linphone_friend_list_synchronize_friends_from_server(lfl);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 3, 5000);
+	BC_ASSERT_EQUAL(stats->sync_done_count, 3, int, "%i");
+	BC_ASSERT_EQUAL(stats->removed_contact_count, 0, int, "%i");
+
+	ms_free(stats);
+	linphone_friend_list_unref(lfl);
+	linphone_core_manager_destroy(manager);
+}
+
+static void carddav_server_to_client_and_client_to_sever_sync(void) {
+	LinphoneCoreManager *manager = linphone_core_manager_new2("carddav_rc", FALSE);
+	LinphoneFriendList *lfl = linphone_core_create_friend_list(manager->lc);
+	LinphoneFriendListCbs *cbs = linphone_friend_list_get_callbacks(lfl);
+	LinphoneCardDAVStats *stats = (LinphoneCardDAVStats *)ms_new0(LinphoneCardDAVStats, 1);
+	LinphoneVcard *lvc1 = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Margaux Clerc\r\nIMPP;TYPE=work:sip:margaux@sip.linphone.org\r\nEND:VCARD\r\n");
+	LinphoneFriend *lf1 = linphone_friend_new_from_vcard(lvc1);
+	LinphoneVcard *lvc2 = linphone_vcard_new_from_vcard4_buffer("BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Ghislain Mary\r\nIMPP;TYPE=work:sip:ghislain@sip.linphone.org\r\nEND:VCARD\r\n");
+	LinphoneFriend *lf2 = linphone_friend_new_from_vcard(lvc2);
 	
 	linphone_friend_list_cbs_set_user_data(cbs, stats);
 	linphone_friend_list_cbs_set_contact_created(cbs, carddav_contact_created);
@@ -609,19 +728,17 @@ static void carddav_multiple_sync(void) {
 	linphone_friend_list_cbs_set_contact_updated(cbs, carddav_contact_updated);
 	linphone_friend_list_cbs_set_sync_status_changed(cbs, carddav_sync_status_changed);
 	linphone_core_add_friend_list(manager->lc, lfl);
-	linphone_friend_list_set_uri(lfl, "http://dav.linphone.org/sabredav/addressbookserver.php/addressbooks/sylvain/default");
+	linphone_friend_list_set_uri(lfl, CARDDAV_SERVER);
 	
+	linphone_friend_list_add_friend(lfl, lf1);
 	linphone_friend_list_synchronize_friends_from_server(lfl);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 1, 2000);
-	BC_ASSERT_EQUAL(stats->sync_done_count, 1, int, "%i");
-	linphone_friend_list_synchronize_friends_from_server(lfl);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 2, 2000);
-	BC_ASSERT_EQUAL(stats->sync_done_count, 2, int, "%i");
-	linphone_friend_list_synchronize_friends_from_server(lfl);
-	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 3, 2000);
+	linphone_friend_list_add_friend(lfl, lf2);
+	wait_for_until(manager->lc, NULL, &stats->sync_done_count, 3, 15000);
 	BC_ASSERT_EQUAL(stats->sync_done_count, 3, int, "%i");
-	BC_ASSERT_EQUAL(stats->removed_contact_count, 0, int, "%i");
-	
+
+	ms_free(stats);
+	linphone_friend_unref(lf1);
+	linphone_friend_unref(lf2);
 	linphone_friend_list_unref(lfl);
 	linphone_core_manager_destroy(manager);
 }
@@ -635,6 +752,8 @@ test_t vcard_tests[] = {
 #ifdef VCARD_ENABLED
 	{ "Import / Export friends from vCards", linphone_vcard_import_export_friends_test },
 	{ "Import a lot of friends from vCards", linphone_vcard_import_a_lot_of_friends_test },
+	{ "vCard creation for existing friends", linphone_vcard_update_existing_friends_test },
+	{ "vCard phone numbers and SIP addresses", linphone_vcard_phone_numbers_and_sip_addresses },
 #ifdef FRIENDS_SQL_STORAGE_ENABLED
 	{ "Friends working if no db set", friends_if_no_db_set },
 	{ "Friends storage migration from rc to db", friends_migration },
@@ -646,6 +765,7 @@ test_t vcard_tests[] = {
 	{ "CardDAV synchronization 3", carddav_sync_3 },
 	{ "CardDAV synchronization 4", carddav_sync_4 },
 	{ "CardDAV integration", carddav_integration },
+	{ "CardDAV client to server and server to client sync", carddav_server_to_client_and_client_to_sever_sync },
 	{ "CardDAV multiple synchronizations", carddav_multiple_sync },
 #else
 	{ "Dummy test", dummy_test }
@@ -653,7 +773,7 @@ test_t vcard_tests[] = {
 };
 
 test_suite_t vcard_test_suite = {
-	"VCard", NULL, NULL, 
+	"VCard", NULL, NULL,
 	liblinphone_tester_before_each, liblinphone_tester_after_each,
 	sizeof(vcard_tests) / sizeof(vcard_tests[0]), vcard_tests
 };

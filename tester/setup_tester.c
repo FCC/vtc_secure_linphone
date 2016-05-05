@@ -42,7 +42,7 @@ static void core_init_test(void) {
 static void linphone_address_test(void) {
 	linphone_address_destroy(create_linphone_address(NULL));
 	BC_ASSERT_PTR_NULL(linphone_address_new("sip:@sip.linphone.org"));
-	
+
 }
 
 static void core_sip_transport_test(void) {
@@ -84,26 +84,23 @@ static void linphone_interpret_url_test(void)
 	memset ( &v_table,0,sizeof ( v_table ) );
 	lc = linphone_core_new ( &v_table,NULL,NULL,NULL );
 	BC_ASSERT_PTR_NOT_NULL_FATAL ( lc );
-	
+
 	proxy_config =linphone_core_create_proxy_config(lc);
 	linphone_proxy_config_set_identity(proxy_config, "sip:moi@sip.linphone.org");
 	linphone_proxy_config_enable_register(proxy_config, FALSE);
 	linphone_proxy_config_set_server_addr(proxy_config,"sip:sip.linphone.org");
 	linphone_core_add_proxy_config(lc, proxy_config);
 	linphone_core_set_default_proxy_config(lc,proxy_config);
-	
+	linphone_proxy_config_unref(proxy_config);
 
 	address = linphone_core_interpret_url(lc, sips_address);
-
 	BC_ASSERT_PTR_NOT_NULL_FATAL(address);
 	BC_ASSERT_STRING_EQUAL_FATAL(linphone_address_get_scheme(address), "sips");
 	BC_ASSERT_STRING_EQUAL_FATAL(linphone_address_get_username(address), "margaux");
 	BC_ASSERT_STRING_EQUAL_FATAL(linphone_address_get_domain(address), "sip.linphone.org");
-
 	linphone_address_destroy(address);
 
 	address = linphone_core_interpret_url(lc,"23");
-	
 	BC_ASSERT_PTR_NOT_NULL(address);
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "23");
@@ -111,7 +108,6 @@ static void linphone_interpret_url_test(void)
 	linphone_address_destroy(address);
 
 	address = linphone_core_interpret_url(lc,"#24");
-	
 	BC_ASSERT_PTR_NOT_NULL(address);
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "#24");
@@ -124,12 +120,10 @@ static void linphone_interpret_url_test(void)
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_scheme(address), "sip");
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_username(address), "#24");
 	BC_ASSERT_STRING_EQUAL(linphone_address_get_domain(address), "sip.linphone.org");
-
 	linphone_address_destroy(address);
 	ms_free(tmp);
 
-	
-	linphone_core_destroy ( lc );
+	linphone_core_destroy (lc);
 }
 
 static void linphone_lpconfig_from_buffer(void){
@@ -298,7 +292,13 @@ static void devices_reload_test(void) {
 	devid1 = ms_strdup(linphone_core_get_video_device(mgr->lc));
 	linphone_core_reload_video_devices(mgr->lc);
 	devid2 = ms_strdup(linphone_core_get_video_device(mgr->lc));
-	BC_ASSERT_STRING_EQUAL(devid1, devid2);
+
+	if (devid1 && devid2) {
+		BC_ASSERT_STRING_EQUAL(devid1, devid2);
+	} else {
+		BC_ASSERT_PTR_NULL(devid1);
+		BC_ASSERT_PTR_NULL(devid2);
+	}
 	ms_free(devid1);
 	ms_free(devid2);
 

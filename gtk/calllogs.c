@@ -31,7 +31,7 @@ char *linphone_gtk_call_logs_storage_get_db_file(const char *filename){
 	if (access(CONFIG_FILE,F_OK)==0){
 		snprintf(db_file,path_max,"%s",filename);
 	}else{
-#ifdef WIN32
+#ifdef _WIN32
 		const char *appdata=getenv("APPDATA");
 		if (appdata){
 			snprintf(db_file,path_max,"%s\\%s",appdata,LINPHONE_CONFIG_DIR);
@@ -115,7 +115,7 @@ void linphone_gtk_call_log_add_contact(GtkWidget *w){
 			la = linphone_call_log_get_dir(cl)==LinphoneCallIncoming ? linphone_call_log_get_from(cl) : linphone_call_log_get_to(cl);
 			if (la != NULL){
 				char *uri=linphone_address_as_string(la);
-				lf=linphone_friend_new_with_address(uri);
+				lf=linphone_core_create_friend_with_address(linphone_gtk_get_core(), uri);
 				linphone_gtk_show_contact(lf, main_window);
 				ms_free(uri);
 			}

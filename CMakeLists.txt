@@ -21,13 +21,13 @@
 ############################################################################
 
 cmake_minimum_required(VERSION 3.0)
-project(LINPHONE C CXX)
+project(linphone VERSION 3.9.1 LANGUAGES C CXX)
 
 
-set(LINPHONE_MAJOR_VERSION "3")
-set(LINPHONE_MINOR_VERSION "9")
-set(LINPHONE_MICRO_VERSION "1")
-set(LINPHONE_VERSION "${LINPHONE_MAJOR_VERSION}.${LINPHONE_MINOR_VERSION}.${LINPHONE_MICRO_VERSION}")
+set(LINPHONE_MAJOR_VERSION ${PROJECT_VERSION_MAJOR})
+set(LINPHONE_MINOR_VERSION ${PROJECT_VERSION_MINOR})
+set(LINPHONE_MICRO_VERSION ${PROJECT_VERSION_PATCH})
+set(LINPHONE_VERSION ${PROJECT_VERSION})
 set(LINPHONE_SO_VERSION "8")
 
 file(GLOB LINPHONE_PO_FILES RELATIVE "${CMAKE_CURRENT_LIST_DIR}/po" "${CMAKE_CURRENT_LIST_DIR}/po/*.po")
@@ -36,7 +36,8 @@ string(REPLACE ";" " " LINPHONE_ALL_LANGS "${LINPHONE_ALL_LANGS_LIST}")
 
 include(CMakeDependentOption)
 
-option(ENABLE_STATIC "Build static library (default is shared library)." NO)
+option(ENABLE_SHARED "Build shared library." YES)
+option(ENABLE_STATIC "Build static library." YES)
 option(ENABLE_CONSOLE_UI "Turn on or off compilation of console interface." YES)
 option(ENABLE_DATE "Use build date in internal version number." NO)
 option(ENABLE_DOC "Enable documentation generation with Doxygen." YES)
@@ -81,6 +82,12 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(CheckSymbolExists)
 include(CMakePushCheckState)
+include(GNUInstallDirs)
+
+if(NOT CMAKE_INSTALL_RPATH AND CMAKE_INSTALL_PREFIX)
+	set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
+	message(STATUS "Setting install rpath to ${CMAKE_INSTALL_RPATH}")
+endif()
 
 set(MSVC_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include/MSVC")
 if(MSVC)
@@ -93,28 +100,15 @@ endif()
 if(LINPHONE_BUILDER_GROUP_EXTERNAL_SOURCE_PATH_BUILDERS)
 	include("${EP_bellesip_CONFIG_DIR}/BelleSIPConfig.cmake")
 	include("${EP_ms2_CONFIG_DIR}/Mediastreamer2Config.cmake")
+	set(BcToolbox_FIND_COMPONENTS tester)
 	include("${EP_bctoolbox_CONFIG_DIR}/BcToolboxConfig.cmake")
 else()
 	find_package(BelleSIP REQUIRED)
 	find_package(Mediastreamer2 REQUIRED)
-	find_package(BcToolBox REQUIRED)
+	find_package(BcToolbox REQUIRED OPTIONAL_COMPONENTS tester)
 endif()
 find_package(XML2 REQUIRED)
 find_package(Zlib)
-if(ENABLE_UNIT_TESTS)
-	find_package(CUnit)
-	if(CUNIT_FOUND)
-		cmake_push_check_state(RESET)
-		list(APPEND CMAKE_REQUIRED_INCLUDES ${CUNIT_INCLUDE_DIRS})
-		list(APPEND CMAKE_REQUIRED_LIBRARIES ${CUNIT_LIBRARIES})
-		check_symbol_exists("CU_get_suite" "CUnit/CUnit.h" HAVE_CU_GET_SUITE)
-		check_symbol_exists("CU_curses_run_tests" "CUnit/CUnit.h" HAVE_CU_CURSES)
-		cmake_pop_check_state()
-	else()
-		message(WARNING "Could not find the cunit library!")
-		set(ENABLE_UNIT_TESTS OFF CACHE BOOL "Enable compilation of unit tests." FORCE)
-	endif()
-endif()
 if(ENABLE_TUNNEL)
 	if(LINPHONE_BUILDER_GROUP_EXTERNAL_SOURCE_PATH_BUILDERS)
 		include("${EP_tunnel_CONFIG_DIR}/TunnelConfig.cmake")
@@ -201,7 +195,7 @@ include_directories(
 	${CMAKE_CURRENT_BINARY_DIR}/coreapi/
 	${BELLESIP_INCLUDE_DIRS}
 	${MEDIASTREAMER2_INCLUDE_DIRS}
-	${BCTOOLBOX_INCLUDE_DIRS}
+	${BCTOOLBOX_CORE_INCLUDE_DIRS}
 )
 if(ENABLE_TUNNEL)
 	include_directories(${TUNNEL_INCLUDE_DIRS})
@@ -236,15 +230,17 @@ if(MSVC)
 	include_directories(${MSVC_INCLUDE_DIR})
 endif()
 
-
 add_definitions("-DIN_LINPHONE")
 if(ENABLE_DEBUG_LOGS)
 	add_definitions("-DDEBUG")
 endif()
+if(ANDROID)
+	add_definitions("-DANDROID")
+endif()
 
 set(STRICT_OPTIONS_CPP )
 set(STRICT_OPTIONS_C )
-set(STRICT_OPTIONS_CXX "-std=c++11")
+set(STRICT_OPTIONS_CXX )
 set(STRICT_OPTIONS_OBJC )
 if(NOT MSVC)
 	list(APPEND STRICT_OPTIONS_CPP "-Wall" "-Wuninitialized" "-Wno-error=deprecated-declarations")
@@ -254,7 +250,6 @@ if(NOT MSVC)
 	endif()
 	if(APPLE)
 		list(APPEND STRICT_OPTIONS_CPP "-Wno-error=unknown-warning-option" "-Qunused-arguments" "-Wno-tautological-compare" "-Wno-unused-function" "-Wno-array-bounds")
-        list(APPEND STRICT_OPTIONS_CXX "-stdlib=libc++")
 	endif()
 	if(ENABLE_STRICT)
 		list(APPEND STRICT_OPTIONS_CPP "-Werror" "-fno-strict-aliasing")
@@ -277,13 +272,13 @@ if(ENABLE_RELATIVE_PREFIX)
 else()
 	set(LINPHONE_DATA_DIR "${CMAKE_INSTALL_PREFIX}")
 endif()
-set(LINPHONE_PLUGINS_DIR "${LINPHONE_DATA_DIR}/lib/liblinphone/plugins")
+set(LINPHONE_PLUGINS_DIR "${LINPHONE_DATA_DIR}/${CMAKE_INSTALL_LIBDIR}/liblinphone/plugins")
 if(WIN32)
 	set(LINPHONE_CONFIG_DIR "Linphone")
 endif()
-set(PACKAGE_LOCALE_DIR "${LINPHONE_DATA_DIR}/share/locale")
-set(PACKAGE_DATA_DIR "${LINPHONE_DATA_DIR}/share")
-set(PACKAGE_SOUND_DIR "${LINPHONE_DATA_DIR}/share/sounds/linphone")
+set(PACKAGE_LOCALE_DIR "${LINPHONE_DATA_DIR}/${CMAKE_INSTALL_DATADIR}/locale")
+set(PACKAGE_DATA_DIR "${LINPHONE_DATA_DIR}/${CMAKE_INSTALL_DATADIR}")
+set(PACKAGE_SOUND_DIR "${LINPHONE_DATA_DIR}/${CMAKE_INSTALL_DATADIR}/sounds/linphone")
 set(PACKAGE_RING_DIR "${PACKAGE_SOUND_DIR}/rings")
 set(PACKAGE_FREEDESKTOP_DIR "${PACKAGE_DATA_DIR}/applications")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
@@ -303,6 +298,7 @@ else()
 endif()
 
 
+add_subdirectory(java)
 add_subdirectory(coreapi)
 add_subdirectory(share)
 if(ENABLE_CONSOLE_UI)
@@ -316,7 +312,7 @@ endif()
 if(ENABLE_TOOLS)
 	add_subdirectory(tools)
 endif()
-if(ENABLE_UNIT_TESTS)
+if(ENABLE_UNIT_TESTS AND BCTOOLBOX_TESTER_FOUND)
 	add_subdirectory(tester)
 endif()
 
@@ -335,13 +331,13 @@ configure_file(cmake/LinphoneConfig.cmake.in
 	@ONLY
 )
 
-set(ConfigPackageLocation lib/cmake/Linphone)
+set(CONFIG_PACKAGE_LOCATION "${CMAKE_INSTALL_DATADIR}/Linphone/cmake")
 install(EXPORT ${EXPORT_TARGETS_NAME}Targets
 	FILE LinphoneTargets.cmake
-	DESTINATION ${ConfigPackageLocation}
+	DESTINATION ${CONFIG_PACKAGE_LOCATION}
 )
 install(FILES
 	"${CMAKE_CURRENT_BINARY_DIR}/LinphoneConfig.cmake"
 	"${CMAKE_CURRENT_BINARY_DIR}/LinphoneConfigVersion.cmake"
-	DESTINATION ${ConfigPackageLocation}
+	DESTINATION ${CONFIG_PACKAGE_LOCATION}
 )

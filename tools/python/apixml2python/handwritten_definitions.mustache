@@ -1,5 +1,28 @@
+PyObject * PyList_FromMSListOfString(const MSList *msl) {
+	PyObject *pyl = PyList_New(0);
+	while (msl != NULL) {
+		PyObject *item = Py_BuildValue("z", (const char *)msl->data);
+		PyList_Append(pyl, item);
+		msl = ms_list_next(msl);
+	}
+	return pyl;
+}
+
+MSList * PyList_AsMSListOfString(PyObject *pyl) {
+	MSList *msl = NULL;
+	Py_ssize_t idx;
+	Py_ssize_t size = PyList_Size(pyl);
+	for (idx = 0; idx < size; idx++) {
+		PyObject *item = PyList_GetItem(pyl, idx);
+		char *citem = (char *)PyString_AsString(item);
+		msl = ms_list_append(msl, citem);
+	}
+	return msl;
+}
+
+
 static void pylinphone_dispatch_messages(void) {
-#ifdef WIN32
+#ifdef _WIN32
 	MSG msg;
 	while (PeekMessage(&msg, NULL, 0, 0, 1)) {
 		TranslateMessage(&msg);
@@ -144,7 +167,7 @@ static PyObject * pylinphone_Call_get_native_video_window_id(PyObject *self, voi
 	pylinphone_dispatch_messages();
 
 	pyret = Py_BuildValue("k", (unsigned long)cresult);
-	
+
 	pylinphone_trace(-1, "[PYLINPHONE] <<< %s -> %p", __FUNCTION__, pyret);
 	return pyret;
 }
@@ -490,7 +513,7 @@ static void pylinphone_Core_dealloc(PyObject *self) {
 	LinphoneCore * native_ptr = pylinphone_Core_get_native_ptr(self);
 	if (Py_REFCNT(self) < 0) return;
 	pylinphone_trace(1, "[PYLINPHONE] >>> %s(%p [%p])", __FUNCTION__, self, native_ptr);
-	
+
 	if (native_ptr != NULL) {
 		linphone_core_destroy(native_ptr);
 	}

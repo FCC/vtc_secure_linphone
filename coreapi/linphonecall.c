@@ -585,7 +585,7 @@ void linphone_call_increment_local_media_description(LinphoneCall *call){
 void linphone_call_update_local_media_description_from_ice_or_upnp(LinphoneCall *call){
 	LinphoneCore *lc = call->core;
 	if (call->ice_session != NULL) {
-		/*set this to FALSE once flexisip are updated*/
+		/*set this to FALSE once flexisip are updated everywhere, let's say in December 2016.*/
 		bool_t use_nortpproxy = lp_config_get_int(lc->config, "sip", "ice_uses_nortpproxy", TRUE);
 		_update_local_media_description_from_ice(call->localdesc, call->ice_session, use_nortpproxy);
 		linphone_core_update_ice_state_in_call_stats(call);
@@ -751,6 +751,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 	} else {
 		ms_message("Don't put audio stream on local offer for call [%p]",call);
 		md->streams[call->main_audio_stream_index].dir = SalStreamInactive;
+		if(l) l=ms_list_free_with_data(l, (void (*)(void *))payload_type_destroy);
 	}
 	if (params->custom_sdp_media_attributes[LinphoneStreamTypeAudio])
 		md->streams[call->main_audio_stream_index].custom_sdp_attributes = sal_custom_sdp_attribute_clone(params->custom_sdp_media_attributes[LinphoneStreamTypeAudio]);
@@ -785,6 +786,7 @@ void linphone_call_make_local_media_description(LinphoneCall *call) {
 	} else {
 		ms_message("Don't put video stream on local offer for call [%p]",call);
 		md->streams[call->main_video_stream_index].dir = SalStreamInactive;
+		if(l) l=ms_list_free_with_data(l, (void (*)(void *))payload_type_destroy);
 	}
 	if (params->custom_sdp_media_attributes[LinphoneStreamTypeVideo])
 		md->streams[call->main_video_stream_index].custom_sdp_attributes = sal_custom_sdp_attribute_clone(params->custom_sdp_media_attributes[LinphoneStreamTypeVideo]);
@@ -1091,6 +1093,21 @@ void linphone_call_fill_media_multicast_addr(LinphoneCall *call) {
 		call->media_ports[call->main_video_stream_index].multicast_ip[0]='\0';
 }
 
+static void linphone_call_create_ice_session(LinphoneCall *call, IceRole role){
+	call->ice_session = ice_session_new();
+	/*for backward compatibility purposes, shall be enabled by default in futur*/
+	ice_session_enable_message_integrity_check(call->ice_session,lp_config_get_int(call->core->config,"net","ice_session_enable_message_integrity_check",1));
+	if (lp_config_get_int(call->core->config, "net", "dont_default_to_stun_candidates", 0)){
+		IceCandidateType types[ICT_CandidateTypeMax];
+		types[0] = ICT_RelayedCandidate;
+		types[1] = ICT_HostCandidate;
+		types[2] = ICT_CandidateInvalid;
+		ice_session_set_default_candidates_types(call->ice_session, types);
+	}
+	
+	ice_session_set_role(call->ice_session, role);
+}
+
 LinphoneCall * linphone_call_new_outgoing(struct _LinphoneCore *lc, LinphoneAddress *from, LinphoneAddress *to, const LinphoneCallParams *params, LinphoneProxyConfig *cfg){
 	LinphoneCall *call = belle_sip_object_new(LinphoneCall);
 
@@ -1106,10 +1123,7 @@ LinphoneCall * linphone_call_new_outgoing(struct _LinphoneCore *lc, LinphoneAddr
 	linphone_call_fill_media_multicast_addr(call);
 
 	if (linphone_core_get_firewall_policy(call->core) == LinphonePolicyUseIce) {
-		call->ice_session = ice_session_new();
-		/*for backward compatibility purposes, shall be enabled by default in futur*/
-		ice_session_enable_message_integrity_check(call->ice_session,lp_config_get_int(lc->config,"net","ice_session_enable_message_integrity_check",1));
-		ice_session_set_role(call->ice_session, IR_Controlling);
+		linphone_call_create_ice_session(call, IR_Controlling);
 	}
 	if (linphone_core_get_firewall_policy(call->core) == LinphonePolicyUseStun) {
 		call->ping_time=linphone_core_run_stun_tests(call->core,call);
@@ -1338,10 +1352,7 @@ LinphoneCall * linphone_call_new_incoming(LinphoneCore *lc, LinphoneAddress *fro
 	/*create the ice session now if ICE is required*/
 	if (fpol==LinphonePolicyUseIce){
 		if (md){
-			call->ice_session = ice_session_new();
-			/*for backward compatibility purposes, shall be enabled by default in futur*/
-			ice_session_enable_message_integrity_check(call->ice_session,lp_config_get_int(lc->config,"net","ice_session_enable_message_integrity_check",1));
-			ice_session_set_role(call->ice_session, IR_Controlled);
+			linphone_call_create_ice_session(call, IR_Controlled);
 		}else{
 			fpol=LinphonePolicyNoFirewall;
 			ms_warning("ICE not supported for incoming INVITE without SDP.");
@@ -1352,7 +1363,7 @@ LinphoneCall * linphone_call_new_incoming(LinphoneCore *lc, LinphoneAddress *fro
 	linphone_call_init_media_streams(call);
 	switch (fpol) {
 		case LinphonePolicyUseIce:
-			linphone_call_prepare_ice(call,TRUE);
+			call->defer_notify_incoming = linphone_call_prepare_ice(call,TRUE) == 1;
 			break;
 		case LinphonePolicyUseStun:
 			call->ping_time=linphone_core_run_stun_tests(call->core,call);
@@ -1704,6 +1715,7 @@ static void linphone_call_destroy(LinphoneCall *obj){
 		linphone_address_unref(obj->me);
 		obj->me = NULL;
 	}
+	if (obj->onhold_file) ms_free(obj->onhold_file);
 
 	sal_error_info_reset(&obj->non_op_error);
 }
@@ -2045,15 +2057,23 @@ LinphoneCall *linphone_call_get_replaced_call(LinphoneCall *call){
 void linphone_call_enable_camera (LinphoneCall *call, bool_t enable){
 #ifdef VIDEO_ENABLED
 	call->camera_enabled=enable;
-	if ((call->state==LinphoneCallStreamsRunning || call->state==LinphoneCallOutgoingEarlyMedia || call->state==LinphoneCallIncomingEarlyMedia)
-		&& call->videostream!=NULL && video_stream_started(call->videostream) ){
-		if (video_stream_get_camera(call->videostream) != linphone_call_get_video_device(call)) {
-			const char *cur_cam, *new_cam;
-			cur_cam = video_stream_get_camera(call->videostream) ? ms_web_cam_get_name(video_stream_get_camera(call->videostream)) : "NULL";
-			new_cam = linphone_call_get_video_device(call) ? ms_web_cam_get_name(linphone_call_get_video_device(call)) : "NULL";
-			ms_message("Switching video cam from [%s] to [%s] on call [%p]"	, cur_cam, new_cam, call);
-			video_stream_change_camera(call->videostream, linphone_call_get_video_device(call));
-		}
+	switch(call->state) {
+		case LinphoneCallStreamsRunning:
+		case LinphoneCallOutgoingEarlyMedia:
+		case LinphoneCallIncomingEarlyMedia:
+		case LinphoneCallConnected:
+			if(call->videostream!=NULL
+				&& video_stream_started(call->videostream)
+				&& video_stream_get_camera(call->videostream) != linphone_call_get_video_device(call)) {
+				const char *cur_cam, *new_cam;
+				cur_cam = video_stream_get_camera(call->videostream) ? ms_web_cam_get_name(video_stream_get_camera(call->videostream)) : "NULL";
+				new_cam = linphone_call_get_video_device(call) ? ms_web_cam_get_name(linphone_call_get_video_device(call)) : "NULL";
+				ms_message("Switching video cam from [%s] to [%s] on call [%p]"	, cur_cam, new_cam, call);
+				video_stream_change_camera(call->videostream, linphone_call_get_video_device(call));
+			}
+			break;
+			
+		default: break;
 	}
 #endif
 }
@@ -2068,7 +2088,7 @@ void linphone_call_send_vfu_request(LinphoneCall *call) {
 		ms_message("Request Full Intra Request on call [%p]", call);
 		video_stream_send_fir(call->videostream);
 	} else if (call->core->sip_conf.vfu_with_info) {
-        ms_message("Request SIP INFO FIR on call [%p]", call);
+		ms_message("Request SIP INFO FIR on call [%p]", call);
 		if (LinphoneCallStreamsRunning == linphone_call_get_state(call))
 			sal_call_send_vfu_request(call->op);
 	} else {
@@ -2225,6 +2245,7 @@ static void _linphone_call_prepare_ice_for_stream(LinphoneCall *call, int stream
 
 int linphone_call_prepare_ice(LinphoneCall *call, bool_t incoming_offer){
 	SalMediaDescription *remote = NULL;
+	int err;
 	bool_t has_video=FALSE;
 
 	if ((linphone_core_get_firewall_policy(call->core) == LinphonePolicyUseIce) && (call->ice_session != NULL)){
@@ -2247,17 +2268,16 @@ int linphone_call_prepare_ice(LinphoneCall *call, bool_t incoming_offer){
 				video_stream_prepare_video(call->videostream);
 			}
 #endif
-			if (call->params->realtimetext_enabled) {
+			if (call->params->realtimetext_enabled && call->textstream->ms.state==MSStreamInitialized) {
 				text_stream_prepare_text(call->textstream);
 			}
 
-			if (linphone_core_gather_ice_candidates(call->core,call)<0) {
+			if ((err=linphone_core_gather_ice_candidates(call->core,call))<0) {
 				/* Ice candidates gathering failed, proceed with the call anyway. */
 				linphone_call_delete_ice_session(call);
 				linphone_call_stop_media_streams_for_ice_gathering(call);
-				return -1;
 			}
-			return 1;/*gathering in progress, wait*/
+			return err;/* 1= gathering in progress, wait; 0=proceed*/
 		}
 	}
 	return 0;
@@ -3383,7 +3403,7 @@ static void setZrtpCryptoTypesParameters(MSZrtpParams *params, LinphoneCore *lc)
 					break;
 				case MS_AES_256_SHA1_32:
 					params->ciphers[params->ciphersCount++] = MS_ZRTP_CIPHER_AES3;
-					params->authTags[params->authTagsCount++] = MS_ZRTP_AUTHTAG_HS80;
+					params->authTags[params->authTagsCount++] = MS_ZRTP_AUTHTAG_HS32;
 					break;
 				case MS_CRYPTO_SUITE_INVALID:
 					break;
@@ -3698,10 +3718,10 @@ static void linphone_call_stop_text_stream(LinphoneCall *call) {
 		linphone_reporting_update_media_info(call, LINPHONE_CALL_STATS_TEXT);
 		media_stream_reclaim_sessions(&call->textstream->ms, &call->sessions[call->main_text_stream_index]);
 		linphone_call_log_fill_stats(call->log, (MediaStream*)call->textstream);
+		update_rtp_stats(call, call->main_text_stream_index);
 		text_stream_stop(call->textstream);
 		call->textstream = NULL;
-		update_rtp_stats(call, call->main_text_stream_index);
-		linphone_call_handle_stream_events(call, call->main_video_stream_index);
+		linphone_call_handle_stream_events(call, call->main_text_stream_index);
 		rtp_session_unregister_event_queue(call->sessions[call->main_text_stream_index].rtp_session, call->textstream_app_evq);
 		ortp_ev_queue_flush(call->textstream_app_evq);
 		ortp_ev_queue_destroy(call->textstream_app_evq);
@@ -4281,13 +4301,10 @@ static void handle_ice_events(LinphoneCall *call, OrtpEvent *ev){
 		linphone_core_update_ice_state_in_call_stats(call);
 		linphone_call_params_unref(params);
 	} else if (evt == ORTP_EVENT_ICE_GATHERING_FINISHED) {
-
-		if (evd->info.ice_processing_successful==TRUE) {
-			linphone_call_on_ice_gathering_finished(call);
-		} else {
-			ms_warning("No STUN answer from [%s], disabling ICE",linphone_core_get_stun_server(call->core));
-			linphone_call_delete_ice_session(call);
+		if (evd->info.ice_processing_successful==FALSE) {
+			ms_warning("No STUN answer from [%s], continuing without STUN",linphone_core_get_stun_server(call->core));
 		}
+		linphone_call_on_ice_gathering_finished(call);
 		switch (call->state) {
 			case LinphoneCallUpdating:
 				linphone_core_start_update_call(call->core, call);
@@ -4895,7 +4912,8 @@ void linphone_call_repair_if_broken(LinphoneCall *call){
 			linphone_call_params_unref(params);
 		break;
 		default:
-			ms_error("linphone_call_resume_if_broken(): don't know what to do in state [%s]", linphone_call_state_to_string(call->state));
+			ms_warning("linphone_call_resume_if_broken(): don't know what to do in state [%s]", linphone_call_state_to_string(call->state));
+			call->broken = FALSE;
 		break;
 	}
 }

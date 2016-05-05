@@ -478,6 +478,8 @@ Sal * sal_init(MSFactory *factory){
 	sal->user_agent=belle_sip_header_user_agent_new();
 #if defined(PACKAGE_NAME) && defined(LIBLINPHONE_VERSION)
 	belle_sip_header_user_agent_add_product(sal->user_agent, PACKAGE_NAME "/" LIBLINPHONE_VERSION);
+#else
+	belle_sip_header_user_agent_add_product(sal->user_agent, "Unknown");
 #endif
 	sal_append_stack_string_to_user_agent(sal);
 	belle_sip_object_ref(sal->user_agent);
@@ -499,6 +501,7 @@ Sal * sal_init(MSFactory *factory){
 	sal->refresher_retry_after=60000; /*default value in ms*/
 	sal->enable_sip_update=TRUE;
 	sal->pending_trans_checking=TRUE;
+	sal->ssl_config = NULL;
 	return sal;
 }
 
@@ -593,6 +596,10 @@ int sal_transport_available(Sal *sal, SalTransport t){
 			return FALSE;
 	}
 	return FALSE;
+}
+
+bool_t sal_content_encoding_available(Sal *sal, const char *content_encoding) {
+	return (bool_t)belle_sip_stack_content_encoding_available(sal->stack, content_encoding);
 }
 
 static int sal_add_listen_port(Sal *ctx, SalAddress* addr, bool_t is_tunneled){
@@ -734,13 +741,15 @@ static void set_tls_properties(Sal *ctx){
 	belle_sip_listening_point_t *lp=belle_sip_provider_get_listening_point(ctx->prov,"TLS");
 	if (lp){
 		belle_sip_tls_listening_point_t *tlp=BELLE_SIP_TLS_LISTENING_POINT(lp);
-		int verify_exceptions=0;
-
-		if (!ctx->tls_verify) verify_exceptions=BELLE_SIP_TLS_LISTENING_POINT_BADCERT_ANY_REASON;
-		else if (!ctx->tls_verify_cn) verify_exceptions=BELLE_SIP_TLS_LISTENING_POINT_BADCERT_CN_MISMATCH;
-
-		belle_sip_tls_listening_point_set_root_ca(tlp,ctx->root_ca); /*root_ca might be NULL */
-		belle_sip_tls_listening_point_set_verify_exceptions(tlp,verify_exceptions);
+		belle_tls_crypto_config_t *crypto_config = belle_tls_crypto_config_new();
+		int verify_exceptions = BELLE_TLS_VERIFY_NONE;
+		if (!ctx->tls_verify) verify_exceptions = BELLE_TLS_VERIFY_ANY_REASON;
+		else if (!ctx->tls_verify_cn) verify_exceptions = BELLE_TLS_VERIFY_CN_MISMATCH;
+		belle_tls_crypto_config_set_verify_exceptions(crypto_config, verify_exceptions);
+		if (ctx->root_ca != NULL) belle_tls_crypto_config_set_root_ca(crypto_config, ctx->root_ca);
+		if (ctx->ssl_config != NULL) belle_tls_crypto_config_set_ssl_config(crypto_config, ctx->ssl_config);
+		belle_sip_tls_listening_point_set_crypto_config(tlp, crypto_config);
+		belle_sip_object_unref(crypto_config);
 	}
 }
 
@@ -763,6 +772,12 @@ void sal_verify_server_certificates(Sal *ctx, bool_t verify){
 
 void sal_verify_server_cn(Sal *ctx, bool_t verify){
 	ctx->tls_verify_cn=verify;
+	set_tls_properties(ctx);
+	return ;
+}
+
+void sal_set_ssl_config(Sal *ctx, void *ssl_config) {
+	ctx->ssl_config = ssl_config;
 	set_tls_properties(ctx);
 	return ;
 }
@@ -831,7 +846,7 @@ int sal_get_transport_timeout(const Sal* sal)  {
 
 void sal_set_dns_servers(Sal *sal, const MSList *servers){
 	belle_sip_list_t *l = NULL;
-	
+
 	/*we have to convert the MSList into a belle_sip_list_t first*/
 	for (; servers != NULL; servers = servers->next){
 		l = belle_sip_list_append(l, servers->data);

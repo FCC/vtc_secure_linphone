@@ -1243,6 +1243,12 @@ typedef enum _LinphoneChatMessageState {
 	LinphoneChatMessageStateFileTransferDone /**< File transfer has been completed successfully. */
 } LinphoneChatMessageState;
 
+typedef enum _LinphoneLimeState {
+	LinphoneLimeDisabled, /**< Lime is not used at all */
+	LinphoneLimeMandatory, /**< Lime is always used */
+	LinphoneLimePreferred, /**< Lime is used only if we already shared a secret with remote */
+} LinphoneLimeState;
+
 /**
  * Call back used to notify message delivery status
  * @param msg #LinphoneChatMessage object
@@ -2584,8 +2590,9 @@ LINPHONE_PUBLIC bool_t linphone_core_get_guess_hostname(LinphoneCore *lc);
  * Tells to LinphoneCore to use Linphone Instant Messaging encryption
  *
  */
-LINPHONE_PUBLIC void linphone_core_enable_lime(LinphoneCore *lc, bool_t val);
-LINPHONE_PUBLIC bool_t linphone_core_lime_enabled(const LinphoneCore *lc);
+LINPHONE_PUBLIC void linphone_core_enable_lime(LinphoneCore *lc, LinphoneLimeState val);
+LINPHONE_PUBLIC LinphoneLimeState linphone_core_lime_enabled(const LinphoneCore *lc);
+LINPHONE_PUBLIC bool_t linphone_core_lime_available(const LinphoneCore *lc);
 
 LINPHONE_PUBLIC	bool_t linphone_core_ipv6_enabled(LinphoneCore *lc);
 LINPHONE_PUBLIC	void linphone_core_enable_ipv6(LinphoneCore *lc, bool_t val);
@@ -2843,7 +2850,7 @@ LINPHONE_PUBLIC int linphone_core_get_payload_type_bitrate(LinphoneCore *lc, con
  * @ingroup media_parameters
  */
 LINPHONE_PUBLIC	int linphone_core_enable_payload_type(LinphoneCore *lc, LinphonePayloadType *pt, bool_t enable);
-LINPHONE_PUBLIC int linphone_core_create_duplicate_payload_type_with_params(LinphoneCore *lc, LinphonePayloadType *pt, LinphonePayloadType *ptWithParams);
+
 /**
  * Wildcard value used by #linphone_core_find_payload_type to ignore rate in search algorithm
  * @ingroup media_parameters
@@ -3091,6 +3098,8 @@ LINPHONE_PUBLIC void linphone_core_get_sip_transports_used(LinphoneCore *lc, LCS
 
 LINPHONE_PUBLIC	bool_t linphone_core_sip_transport_supported(const LinphoneCore *lc, LinphoneTransportType tp);
 
+LINPHONE_PUBLIC bool_t linphone_core_content_encoding_supported(const LinphoneCore *lc, const char *content_encoding);
+
 /**
  *
  * Give access to the UDP sip socket. Can be useful to configure this socket as persistent I.E kCFStreamNetworkServiceType set to kCFStreamNetworkServiceTypeVoIP)
@@ -3204,32 +3213,43 @@ LINPHONE_PUBLIC void linphone_core_reload_sound_devices(LinphoneCore *lc);
 
 LINPHONE_PUBLIC bool_t linphone_core_sound_device_can_capture(LinphoneCore *lc, const char *device);
 LINPHONE_PUBLIC bool_t linphone_core_sound_device_can_playback(LinphoneCore *lc, const char *device);
-LINPHONE_PUBLIC	int linphone_core_get_ring_level(LinphoneCore *lc);
-LINPHONE_PUBLIC	int linphone_core_get_play_level(LinphoneCore *lc);
-LINPHONE_PUBLIC int linphone_core_get_rec_level(LinphoneCore *lc);
-LINPHONE_PUBLIC	void linphone_core_set_ring_level(LinphoneCore *lc, int level);
-LINPHONE_PUBLIC	void linphone_core_set_play_level(LinphoneCore *lc, int level);
+LINPHONE_PUBLIC	LINPHONE_DEPRECATED int linphone_core_get_ring_level(LinphoneCore *lc);
+LINPHONE_PUBLIC	LINPHONE_DEPRECATED int linphone_core_get_play_level(LinphoneCore *lc);
+LINPHONE_PUBLIC LINPHONE_DEPRECATED int linphone_core_get_rec_level(LinphoneCore *lc);
+LINPHONE_PUBLIC	LINPHONE_DEPRECATED void linphone_core_set_ring_level(LinphoneCore *lc, int level);
+LINPHONE_PUBLIC	LINPHONE_DEPRECATED void linphone_core_set_play_level(LinphoneCore *lc, int level);
+LINPHONE_PUBLIC LINPHONE_DEPRECATED void linphone_core_set_rec_level(LinphoneCore *lc, int level);
+LINPHONE_DEPRECATED char linphone_core_get_sound_source(LinphoneCore *lc);
+LINPHONE_DEPRECATED void linphone_core_set_sound_source(LinphoneCore *lc, char source);
 
 LINPHONE_PUBLIC	void linphone_core_set_mic_gain_db(LinphoneCore *lc, float level);
 LINPHONE_PUBLIC	float linphone_core_get_mic_gain_db(LinphoneCore *lc);
 LINPHONE_PUBLIC	void linphone_core_set_playback_gain_db(LinphoneCore *lc, float level);
 LINPHONE_PUBLIC	float linphone_core_get_playback_gain_db(LinphoneCore *lc);
 
-LINPHONE_PUBLIC void linphone_core_set_rec_level(LinphoneCore *lc, int level);
 LINPHONE_PUBLIC const char * linphone_core_get_ringer_device(LinphoneCore *lc);
 LINPHONE_PUBLIC const char * linphone_core_get_playback_device(LinphoneCore *lc);
 LINPHONE_PUBLIC const char * linphone_core_get_capture_device(LinphoneCore *lc);
 LINPHONE_PUBLIC int linphone_core_set_ringer_device(LinphoneCore *lc, const char * devid);
 LINPHONE_PUBLIC int linphone_core_set_playback_device(LinphoneCore *lc, const char * devid);
 LINPHONE_PUBLIC int linphone_core_set_capture_device(LinphoneCore *lc, const char * devid);
-char linphone_core_get_sound_source(LinphoneCore *lc);
-void linphone_core_set_sound_source(LinphoneCore *lc, char source);
+
 LINPHONE_PUBLIC void linphone_core_stop_ringing(LinphoneCore *lc);
 LINPHONE_PUBLIC	void linphone_core_set_ring(LinphoneCore *lc, const char *path);
 LINPHONE_PUBLIC const char *linphone_core_get_ring(const LinphoneCore *lc);
 LINPHONE_PUBLIC void linphone_core_verify_server_certificates(LinphoneCore *lc, bool_t yesno);
 LINPHONE_PUBLIC void linphone_core_verify_server_cn(LinphoneCore *lc, bool_t yesno);
 LINPHONE_PUBLIC void linphone_core_set_root_ca(LinphoneCore *lc, const char *path);
+/**
+ * @internal
+ * Set the pointer to an externally provided ssl configuration for the crypto library
+ * @param			lc			#LinphoneCore object
+ * @param[in]		ssl_config	A pointer to an opaque structure which will be provided directly to the crypto library used in bctoolbox. Use with extra care.
+ * 								This ssl_config structure is responsability of the caller and will not be freed at the connection's end.
+ * @ingroup initializing
+ * @endinternal
+ */
+LINPHONE_PUBLIC void linphone_core_set_ssl_config(LinphoneCore *lc, void *ssl_config);
 LINPHONE_PUBLIC const char *linphone_core_get_root_ca(LinphoneCore *lc);
 LINPHONE_PUBLIC	void linphone_core_set_ringback(LinphoneCore *lc, const char *path);
 LINPHONE_PUBLIC const char * linphone_core_get_ringback(const LinphoneCore *lc);

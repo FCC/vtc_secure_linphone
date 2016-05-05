@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <gtkosxapplication.h>
 #endif
 
-#if defined(WIN32) && !defined(F_OK)
+#if defined(_WIN32) && !defined(F_OK)
 #define F_OK 00 /*visual studio does not define F_OK*/
 #endif
 
@@ -65,7 +65,7 @@ char *linphone_gtk_message_storage_get_db_file(const char *filename){
 	if (access(CONFIG_FILE,F_OK)==0){
 		snprintf(db_file,path_max,"%s",filename);
 	}else{
-#ifdef WIN32
+#ifdef _WIN32
 		const char *appdata=getenv("APPDATA");
 		if (appdata){
 			snprintf(db_file,path_max,"%s\\%s",appdata,LINPHONE_CONFIG_DIR);
@@ -302,7 +302,7 @@ void linphone_gtk_send_text(void){
 	if (strlen(entered)>0) {
 		LinphoneChatMessage *msg;
 		LinphoneChatMessageCbs *cbs;
-		msg=linphone_chat_room_create_message(cr,entered);
+		msg=linphone_chat_message_ref(linphone_chat_room_create_message(cr,entered));
 		cbs=linphone_chat_message_get_callbacks(msg);
 		linphone_chat_message_cbs_set_msg_state_changed(cbs,on_chat_state_changed);
 		linphone_chat_room_send_chat_message(cr,msg);
@@ -313,6 +313,8 @@ void linphone_gtk_send_text(void){
 		g_signal_handlers_disconnect_by_func(G_OBJECT(entry),(GCallback)linphone_gtk_compose_text,NULL);
 		gtk_entry_set_text(GTK_ENTRY(entry),"");
 		g_signal_connect_swapped(G_OBJECT(entry),"changed",(GCallback)linphone_gtk_compose_text,NULL);
+
+		linphone_chat_message_unref(msg);
 	}
 }
 
@@ -354,17 +356,18 @@ void display_history_message(GtkWidget *chat_view,MSList *messages,const Linphon
 
 static void linphone_gtk_chat_add_contact(const LinphoneAddress *addr){
 	LinphoneFriend *lf=NULL;
+	LinphoneCore *lc = linphone_gtk_get_core();
 	gboolean show_presence=FALSE;
 	char *uri=linphone_address_as_string(addr);
 
-	lf=linphone_friend_new_with_address(uri);
+	lf=linphone_core_create_friend_with_address(lc, uri);
 	ms_free(uri);
 
 	linphone_friend_set_inc_subscribe_policy(lf,LinphoneSPWait);
 	linphone_friend_send_subscribe(lf,show_presence);
 
 	linphone_friend_set_address(lf,addr);
-	linphone_core_add_friend(linphone_gtk_get_core(),lf);
+	linphone_core_add_friend(lc, lf);
 	linphone_gtk_show_friends();
 }
 

@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma GCC diagnostic pop
 #endif
 
-#ifdef WIN32
+#ifdef _WIN32
 // alloca is already defined by gtk
 #undef alloca
 #endif
@@ -293,6 +293,7 @@ LINPHONE_PUBLIC void linphone_gtk_mtu_set(GtkWidget *w);
 LINPHONE_PUBLIC void linphone_gtk_mtu_changed(GtkWidget *w);
 LINPHONE_PUBLIC void linphone_gtk_use_sip_info_dtmf_toggled(GtkWidget *w);
 LINPHONE_PUBLIC void linphone_gtk_ipv6_toggled(GtkWidget *w);
+LINPHONE_PUBLIC void linphone_gtk_lime_changed(GtkComboBoxText *comboext);
 LINPHONE_PUBLIC void linphone_gtk_disabled_udp_port_toggle(GtkCheckButton *button);
 LINPHONE_PUBLIC void linphone_gtk_random_udp_port_toggle(GtkCheckButton *button);
 LINPHONE_PUBLIC void linphone_gtk_udp_port_value_changed(GtkSpinButton *button);

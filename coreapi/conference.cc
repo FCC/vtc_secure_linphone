@@ -42,7 +42,6 @@ public:
 		bool operator==(const Participant &src) const;
 		const LinphoneAddress *getUri() const {return m_uri;}
 		LinphoneCall *getCall() const {return m_call;}
-		void setCall(LinphoneCall *call) {m_call = call;}
 		
 	private:
 		LinphoneAddress *m_uri;
@@ -220,7 +219,6 @@ Conference::Params::Params(const LinphoneCore *core): m_enableVideo(false) {
 		if(policy->automatically_initiate) m_enableVideo = true;
 	}
 }
-
 
 
 Conference::Conference(LinphoneCore *core, const Conference::Params *params):
@@ -686,15 +684,25 @@ int RemoteConference::addParticipant(LinphoneCall *call) {
 }
 
 int RemoteConference::removeParticipant(const LinphoneAddress *uri) {
-	char *tmp, *refer_to;
+	char *refer_to;
+	LinphoneAddress *refer_to_addr;
 	int res;
 	
 	switch(m_state) {
 		case LinphoneConferenceReady:
-			tmp = linphone_address_as_string_uri_only(uri);
-			refer_to = ms_strdup_printf("%s;method=BYE", tmp);
+			if(findParticipant(uri) == NULL) {
+				char *tmp = linphone_address_as_string(uri);
+				ms_error("Conference: could not remove participant '%s': not in the participants list", tmp);
+				ms_free(tmp);
+				return -1;
+			}
+			
+// 			refer_to = ms_strdup_printf("%s;method=BYE", tmp);
+			refer_to_addr = linphone_address_clone(uri);
+			linphone_address_set_method_param(refer_to_addr, "BYE");
+			refer_to = linphone_address_as_string(refer_to_addr);
+			linphone_address_unref(refer_to_addr);
 			res = sal_call_refer(m_focusCall->op, refer_to);
-			ms_free(tmp);
 			ms_free(refer_to);
 			
 			if(res == 0) {
@@ -971,7 +979,7 @@ int linphone_conference_leave(LinphoneConference *obj) {
 }
 
 bool_t linphone_conference_is_in(const LinphoneConference *obj) {
-	return ((Conference *)obj)->isIn() ? TRUE : FALSE;
+	return ((Conference *)obj)->isIn();
 }
 
 AudioStream *linphone_conference_get_audio_stream(const LinphoneConference *obj) {

@@ -154,16 +154,16 @@ struct _LinphoneCallParams{
 	bool_t has_video;
 	bool_t avpf_enabled; /* RTCP feedback messages are enabled */
 	bool_t implicit_rtcp_fb;
-	
+
 	bool_t real_early_media; /*send real media even during early media (for outgoing calls)*/
 	bool_t in_conference; /*in conference mode */
 	bool_t low_bandwidth;
 	bool_t no_user_consent;/*when set to TRUE an UPDATE request will be used instead of reINVITE*/
-	
+
 	uint16_t avpf_rr_interval; /*in milliseconds*/
 	bool_t internal_call_update; /*use mark that call update was requested internally (might be by ice) - unused for the moment*/
 	bool_t video_multicast_enabled;
-	
+
 	bool_t audio_multicast_enabled;
 	bool_t realtimetext_enabled;
 	bool_t update_call_when_ice_completed;
@@ -340,6 +340,7 @@ struct _LinphoneCall{
 	char *dtls_certificate_fingerprint; /**> This fingerprint is computed during stream init and is stored in call to be used when making local media description */
 	char *onhold_file; /*set if a on-hold file is to be played*/
 	LinphoneChatRoom *chat_room;
+	LinphoneConference *conf_ref; /**> Point on the associated conference if this call is part of a conference. NULL instead. */
 	bool_t refer_pending;
 	bool_t expect_media_in_ack;
 	bool_t audio_muted;
@@ -357,8 +358,7 @@ struct _LinphoneCall{
 
 	bool_t paused_by_app;
 	bool_t broken; /*set to TRUE when the call is in broken state due to network disconnection or transport */
-	
-	LinphoneConference *conf_ref; /**> Point on the associated conference if this call is part of a conference. NULL instead. */
+	bool_t defer_notify_incoming;
 };
 
 BELLE_SIP_DECLARE_VPTR(LinphoneCall);
@@ -400,7 +400,7 @@ void linphone_proxy_config_stop_refreshing(LinphoneProxyConfig *obj);
 void linphone_proxy_config_write_all_to_config_file(LinphoneCore *lc);
 void _linphone_proxy_config_release(LinphoneProxyConfig *cfg);
 void _linphone_proxy_config_unpublish(LinphoneProxyConfig *obj);
-	
+
 /*
  * returns service route as defined in as defined by rfc3608, might be a list instead of just one.
  * Can be NULL
@@ -515,7 +515,7 @@ void linphone_proxy_config_update(LinphoneProxyConfig *cfg);
 LinphoneProxyConfig * linphone_core_lookup_known_proxy(LinphoneCore *lc, const LinphoneAddress *uri);
 const char *linphone_core_find_best_identity(LinphoneCore *lc, const LinphoneAddress *to);
 int linphone_core_get_local_ip_for(int type, const char *dest, char *result);
-void linphone_core_get_local_ip(LinphoneCore *lc, int af, const char *dest, char *result);
+LINPHONE_PUBLIC void linphone_core_get_local_ip(LinphoneCore *lc, int af, const char *dest, char *result);
 
 LinphoneProxyConfig *linphone_proxy_config_new_from_config_file(LinphoneCore *lc, int index);
 void linphone_proxy_config_write_to_config_file(struct _LpConfig* config,LinphoneProxyConfig *obj, int index);
@@ -584,6 +584,7 @@ int linphone_chat_room_upload_file(LinphoneChatMessage *msg);
 void _linphone_chat_room_send_message(LinphoneChatRoom *cr, LinphoneChatMessage *msg);
 LinphoneChatMessageCbs *linphone_chat_message_cbs_new(void);
 LinphoneChatRoom *_linphone_core_create_chat_room_from_call(LinphoneCall *call);
+bool_t linphone_chat_room_lime_enabled(LinphoneChatRoom *cr);
 /**/
 
 struct _LinphoneProxyConfig
@@ -693,7 +694,7 @@ struct _LinphoneFriend{
 	bool_t commit;
 	bool_t initial_subscribes_sent; /*used to know if initial subscribe message was sent or not*/
 	bool_t presence_received;
-	LinphoneVCard *vcard;
+	LinphoneVcard *vcard;
 	unsigned int storage_id;
 	LinphoneFriendList *friend_list;
 };
@@ -703,10 +704,10 @@ BELLE_SIP_DECLARE_VPTR(LinphoneFriend);
 struct _LinphoneFriendListCbs {
 	belle_sip_object_t base;
 	void *user_data;
-	LinphoneFriendListContactCreatedCb contact_created_cb;
-	LinphoneFriendListContactDeletedCb contact_deleted_cb;
-	LinphoneFriendListContactUpdatedCb contact_updated_cb;
-	LinphoneFriendListSyncStateChangedCb sync_state_changed_cb;
+	LinphoneFriendListCbsContactCreatedCb contact_created_cb;
+	LinphoneFriendListCbsContactDeletedCb contact_deleted_cb;
+	LinphoneFriendListCbsContactUpdatedCb contact_updated_cb;
+	LinphoneFriendListCbsSyncStateChangedCb sync_state_changed_cb;
 };
 
 BELLE_SIP_DECLARE_VPTR(LinphoneFriendListCbs);
@@ -958,12 +959,12 @@ struct _LinphoneCore
 	bool_t auto_net_state_mon;
 	bool_t sip_network_reachable;
 	bool_t media_network_reachable;
-	
+
 	bool_t network_reachable_to_be_notified; /*set to true when state must be notified in next iterate*/
 	bool_t use_preview_window;
 	bool_t network_last_status;
 	bool_t ringstream_autorelease;
-	
+
 	bool_t vtables_running;
 	bool_t send_call_stats_periodical_updates;
 	bool_t forced_ice_relay;
@@ -991,7 +992,7 @@ struct _LinphoneCore
 	UpnpContext *upnp;
 #endif //BUILD_UPNP
 	belle_http_provider_t *http_provider;
-	belle_tls_verify_policy_t *http_verify_policy;
+	belle_tls_crypto_config_t *http_crypto_config;
 	belle_http_request_listener_t *provisioning_http_listener;
 	MSList *tones;
 	LinphoneReason chat_deny_code;
@@ -1084,7 +1085,7 @@ void linphone_call_background_tasks(LinphoneCall *call, bool_t one_second_elapse
 void linphone_call_set_broken(LinphoneCall *call);
 void linphone_call_repair_if_broken(LinphoneCall *call);
 void linphone_core_repair_calls(LinphoneCore *lc);
-void linphone_core_preempt_sound_resources(LinphoneCore *lc);
+int linphone_core_preempt_sound_resources(LinphoneCore *lc);
 int _linphone_core_pause_call(LinphoneCore *lc, LinphoneCall *call);
 
 /*conferencing subsystem*/
@@ -1272,6 +1273,7 @@ struct _LinphoneCardDavContext {
 	LinphoneCardDavContactUpdatedCb contact_updated_cb;
 	LinphoneCardDavContactRemovedCb contact_removed_cb;
 	LinphoneCardDavSynchronizationDoneCb sync_done_cb;
+	LinphoneAuthInfo *auth_info;
 };
 
 struct _LinphoneCardDavQuery {
@@ -1287,7 +1289,6 @@ struct _LinphoneCardDavQuery {
 };
 
 struct _LinphoneCardDavResponse {
-	LinphoneCardDavContext *context;
 	const char *etag;
 	const char *url;
 	const char *vcard;
@@ -1508,14 +1509,14 @@ LINPHONE_PUBLIC void _linphone_core_add_listener(LinphoneCore *lc, LinphoneCoreV
 LINPHONE_PUBLIC MSWebCam *linphone_call_get_video_device(const LinphoneCall *call);
 MSWebCam *get_nowebcam_device(MSFactory *f);
 #endif
-bool_t linphone_core_lime_for_file_sharing_enabled(const LinphoneCore *lc);
+LinphoneLimeState linphone_core_lime_for_file_sharing_enabled(const LinphoneCore *lc);
 
 BELLE_SIP_DECLARE_VPTR(LinphoneTunnelConfig);
 
 int linphone_core_get_default_proxy_config_index(LinphoneCore *lc);
 
 char *linphone_presence_model_to_xml(LinphonePresenceModel *model) ;
-	
+
 #ifdef __cplusplus
 }
 #endif

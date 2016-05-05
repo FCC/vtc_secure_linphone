@@ -85,24 +85,6 @@ int linphone_core_enable_payload_type(LinphoneCore *lc, LinphonePayloadType *pt,
 	return -1;
 }
 
-int linphone_core_create_duplicate_payload_type_with_params(LinphoneCore *lc, LinphonePayloadType *pt, LinphonePayloadType *ptWithParams){
-        if (ms_list_find(lc->codecs_conf.audio_codecs,pt) || ms_list_find(lc->codecs_conf.video_codecs,pt) || ms_list_find(lc->codecs_conf.text_codecs,pt)){
-		if(strcmp(pt->mime_type, ptWithParams->mime_type) == 0 && pt->type == ptWithParams->type){
-			lc->codecs_conf.video_codecs = ms_list_append(lc->codecs_conf.video_codecs, ptWithParams);
-               		 payload_type_set_enable(ptWithParams,TRUE);
-               		 _linphone_core_codec_config_write(lc);
-               		 linphone_core_update_allocated_audio_bandwidth(lc);
-               		 return 0;
-		}
-		else{
-			ms_error("Codec is not equivalent");
-			return -1;
-		}
-        }
-        ms_error("Enabling codec not in audio or video list of PayloadType !");
-        return -1;
-}
-
 int linphone_core_get_payload_type_number(LinphoneCore *lc, const PayloadType *pt){
 	return payload_type_get_number(pt);
 }
@@ -646,16 +628,15 @@ void linphone_core_enable_forced_ice_relay(LinphoneCore *lc, bool_t enable) {
 	lc->forced_ice_relay = enable;
 }
 
-int linphone_core_gather_ice_candidates(LinphoneCore *lc, LinphoneCall *call)
-{
+int linphone_core_gather_ice_candidates(LinphoneCore *lc, LinphoneCall *call){
 	char local_addr[64];
-	const struct addrinfo *ai;
+	const struct addrinfo *ai = NULL;
 	IceCheckList *audio_check_list;
 	IceCheckList *video_check_list;
 	IceCheckList *text_check_list;
 	const char *server = linphone_core_get_stun_server(lc);
 
-	if ((server == NULL) || (call->ice_session == NULL)) return -1;
+	if (call->ice_session == NULL) return -1;
 	audio_check_list = ice_session_check_list(call->ice_session, call->main_audio_stream_index);
 	video_check_list = ice_session_check_list(call->ice_session, call->main_video_stream_index);
 	text_check_list = ice_session_check_list(call->ice_session, call->main_text_stream_index);
@@ -665,10 +646,13 @@ int linphone_core_gather_ice_candidates(LinphoneCore *lc, LinphoneCall *call)
 		ms_warning("Ice gathering is not implemented for ipv6");
 		return -1;
 	}
-	ai=linphone_core_get_stun_server_addrinfo(lc);
-	if (ai==NULL){
-		ms_warning("Fail to resolve STUN server for ICE gathering.");
-		return -1;
+	if (server){
+		ai=linphone_core_get_stun_server_addrinfo(lc);
+		if (ai==NULL){
+			ms_warning("Fail to resolve STUN server for ICE gathering, continuing without stun.");
+		}
+	}else{
+		ms_warning("Ice is used without stun server.");
 	}
 	linphone_core_notify_display_status(lc, _("ICE local candidates gathering in progress..."));
 
@@ -696,10 +680,17 @@ int linphone_core_gather_ice_candidates(LinphoneCore *lc, LinphoneCall *call)
 		ice_add_local_candidate(text_check_list, "host", local_addr, call->media_ports[call->main_text_stream_index].rtcp_port, 2, NULL);
 		call->stats[LINPHONE_CALL_STATS_TEXT].ice_state = LinphoneIceStateInProgress;
 	}
-
-	ms_message("ICE: gathering candidate from [%s]",server);
-	/* Gather local srflx candidates. */
-	ice_session_gather_candidates(call->ice_session, ai->ai_addr, (socklen_t)ai->ai_addrlen);
+	if (ai){
+		ms_message("ICE: gathering candidate from [%s]",server);
+		/* Gather local srflx candidates. */
+		ice_session_gather_candidates(call->ice_session, ai->ai_addr, (socklen_t)ai->ai_addrlen);
+		return 1;
+	} else {
+		ms_message("ICE: bypass candidates gathering");
+		ice_session_compute_candidates_foundations(call->ice_session);
+		ice_session_eliminate_redundant_candidates(call->ice_session);
+		ice_session_choose_default_candidates(call->ice_session);
+	}
 	return 0;
 }
 
@@ -749,6 +740,10 @@ void linphone_core_update_ice_state_in_call_stats(LinphoneCall *call)
 					case ICT_RelayedCandidate:
 						call->stats[LINPHONE_CALL_STATS_AUDIO].ice_state = LinphoneIceStateRelayConnection;
 						break;
+					case ICT_CandidateInvalid:
+					case ICT_CandidateTypeMax:
+						/*shall not happen*/
+						break;
 				}
 			} else {
 				call->stats[LINPHONE_CALL_STATS_AUDIO].ice_state = LinphoneIceStateFailed;
@@ -768,6 +763,10 @@ void linphone_core_update_ice_state_in_call_stats(LinphoneCall *call)
 					case ICT_RelayedCandidate:
 						call->stats[LINPHONE_CALL_STATS_VIDEO].ice_state = LinphoneIceStateRelayConnection;
 						break;
+					case ICT_CandidateInvalid:
+					case ICT_CandidateTypeMax:
+						/*shall not happen*/
+						break;
 				}
 			} else {
 				call->stats[LINPHONE_CALL_STATS_VIDEO].ice_state = LinphoneIceStateFailed;
@@ -786,6 +785,10 @@ void linphone_core_update_ice_state_in_call_stats(LinphoneCall *call)
 						break;
 					case ICT_RelayedCandidate:
 						call->stats[LINPHONE_CALL_STATS_TEXT].ice_state = LinphoneIceStateRelayConnection;
+						break;
+					case ICT_CandidateInvalid:
+					case ICT_CandidateTypeMax:
+						/*shall not happen*/
 						break;
 				}
 			} else {

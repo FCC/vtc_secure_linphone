@@ -1330,6 +1330,11 @@ public interface LinphoneCore {
 	 * If the device has a builtin echo canceller, it will return false.
 	 */
 	boolean hasBuiltInEchoCanceler();
+	
+	/**
+	 * Returns true if the OpenGL on this device is crappy and we need to use the old Android display
+	 */
+	boolean hasCrappyOpenGL();
 
 	void enableIpv6(boolean enable);
 
@@ -2303,4 +2308,9 @@ public interface LinphoneCore {
 	 */
 	public void setUserCertificatesPath(String path);
 
+	/**
+	 * Reload mediastreamer2 plugins from specified directory.
+	 * @param path The path from where plugins are to be loaded.
+	**/
+	public void reloadMsPlugins(String path);
 }

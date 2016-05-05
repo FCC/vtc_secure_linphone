@@ -22,7 +22,7 @@
 
 
 
-#include "bc_tester_utils.h"
+#include <bctoolbox/tester.h>
 #include "linphonecore.h"
 #include <mediastreamer2/msutils.h>
 #ifdef HAVE_CONFIG_H
@@ -239,7 +239,7 @@ typedef struct _stats {
 
 	int video_download_bandwidth[3];
 	int video_upload_bandwidth[3];
-	int current_bandwidth_index;
+	int current_bandwidth_index[2] /*audio and video only*/;
 
 	int number_of_rtcp_generic_nack;
 }stats;
@@ -357,7 +357,7 @@ int linphone_core_manager_get_mean_audio_up_bw(const LinphoneCoreManager *mgr);
 void video_call_base_2(LinphoneCoreManager* pauline,LinphoneCoreManager* marie, bool_t using_policy,LinphoneMediaEncryption mode, bool_t callee_video_enabled, bool_t caller_video_enabled);
 
 void liblinphone_tester_before_each(void);
-void liblinphone_tester_after_each(void);
+int liblinphone_tester_after_each(void);
 void liblinphone_tester_init(void(*ftester_printf)(int level, const char *fmt, va_list args));
 void liblinphone_tester_uninit(void);
 int liblinphone_tester_set_log_file(const char *filename);
@@ -367,8 +367,9 @@ LinphoneConferenceServer* linphone_conference_server_new(const char *rc_file, bo
 void linphone_conference_server_destroy(LinphoneConferenceServer *conf_srv);
 
 extern const char *liblinphone_tester_mire_id;
-
-FILE *sip_start(const char *senario, const char* dest_username, LinphoneAddress* dest_addres);
+	
+LinphoneAddress * linphone_core_manager_resolve(LinphoneCoreManager *mgr, const LinphoneAddress *source);
+FILE *sip_start(const char *senario, const char* dest_username, const char *passwd, LinphoneAddress* dest_addres);
 
 void wait_core(LinphoneCore *core) ;
 

@@ -132,6 +132,7 @@ static void subscribe_process_request_event(void *op_base, const belle_sip_reque
 		ms_warning("No event header in incoming SUBSCRIBE.");
 		resp=sal_op_create_response_from_request(op,req,400);
 		belle_sip_server_transaction_send_response(server_transaction,resp);
+		if (!op->dialog) sal_op_release(op);
 		return;
 	}
 	if (op->event==NULL) {
@@ -142,7 +143,13 @@ static void subscribe_process_request_event(void *op_base, const belle_sip_reque
 	
 	if (!op->dialog) {
 		if (strcmp(method,"SUBSCRIBE")==0){
-			op->dialog=belle_sip_provider_create_dialog(op->base.root->prov,BELLE_SIP_TRANSACTION(server_transaction));
+			op->dialog = belle_sip_provider_create_dialog(op->base.root->prov,BELLE_SIP_TRANSACTION(server_transaction));
+			if (!op->dialog){
+				resp=sal_op_create_response_from_request(op,req,481);
+				belle_sip_server_transaction_send_response(server_transaction,resp);
+				sal_op_release(op);
+				return;
+			}
 			belle_sip_dialog_set_application_data(op->dialog, sal_op_ref(op));
 			ms_message("new incoming subscription from [%s] to [%s]",sal_op_get_from(op),sal_op_get_to(op));
 		}else{ /*this is a NOTIFY*/
@@ -188,6 +195,18 @@ static void subscribe_process_request_event(void *op_base, const belle_sip_reque
 
 static belle_sip_listener_callbacks_t op_subscribe_callbacks={ 0 };
 
+/*Invoke when sal_op_release is called by upper layer*/
+static void sal_op_release_cb(struct SalOpBase* op_base) {
+	SalOp *op =(SalOp*)op_base;
+	if(op->refresher) {
+		belle_sip_refresher_stop(op->refresher);
+		belle_sip_object_unref(op->refresher);
+		op->refresher=NULL;
+		set_or_update_dialog(op,NULL); /*only if we have refresher. else dialog terminated event will remove association*/
+	}
+	
+}
+
 void sal_op_subscribe_fill_cbs(SalOp*op) {
 	if (op_subscribe_callbacks.process_io_error==NULL){
 		op_subscribe_callbacks.process_io_error=subscribe_process_io_error;
@@ -199,6 +218,7 @@ void sal_op_subscribe_fill_cbs(SalOp*op) {
 	}
 	op->callbacks=&op_subscribe_callbacks;
 	op->type=SalOpSubscribe;
+	op->base.release_cb=sal_op_release_cb;
 }
 
 

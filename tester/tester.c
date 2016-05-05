@@ -20,17 +20,13 @@
 #include "linphonecore.h"
 #include "private.h"
 #include "liblinphone_tester.h"
+#include <bctoolbox/tester.h>
 
 #if __clang__ || ((__GNUC__ == 4 && __GNUC_MINOR__ >= 6) || __GNUC__ > 4)
 #pragma GCC diagnostic push
 #endif
 #pragma GCC diagnostic ignored "-Wstrict-prototypes"
 
-#include "CUnit/TestRun.h"
-#include "CUnit/Automated.h"
-#if HAVE_CU_CURSES
-#include "CUnit/CUCurses.h"
-#endif
 #ifdef HAVE_GTK
 #include <gtk/gtk.h>
 #endif
@@ -221,6 +217,18 @@ bool_t wait_for_list(MSList* lcs,int* counter,int value,int timeout_ms) {
 	else return TRUE;
 }
 
+bool_t wait_for_stun_resolution(LinphoneCoreManager *m) {
+	MSTimeSpec start;
+	int timeout_ms = 10000;
+
+	liblinphone_tester_clock_start(&start);
+	while (m->lc->net_conf.stun_addrinfo == NULL && !liblinphone_tester_clock_elapsed(&start,timeout_ms)) {
+		linphone_core_iterate(m->lc);
+		ms_usleep(20000);
+	}
+	return m->lc->net_conf.stun_addrinfo != NULL;
+}
+
 static void set_codec_enable(LinphoneCore* lc,const char* type,int rate,bool_t enable) {
 	MSList* codecs=ms_list_copy(linphone_core_get_audio_codecs(lc));
 	MSList* codecs_it;
@@ -258,7 +266,7 @@ bool_t transport_supported(LinphoneTransportType transport) {
 void linphone_core_manager_init(LinphoneCoreManager *mgr, const char* rc_file) {
 	char *rc_path = NULL;
 	char *hellopath = bc_tester_res("sounds/hello8000.wav");
-	mgr->number_of_cunit_error_at_creation = CU_get_number_of_failures();
+	mgr->number_of_cunit_error_at_creation =  bc_get_number_of_failures();
 	mgr->v_table.registration_state_changed=registration_state_changed;
 	mgr->v_table.auth_info_requested=auth_info_requested;
 	mgr->v_table.call_state_changed=call_state_changed;
@@ -332,10 +340,13 @@ void linphone_core_manager_start(LinphoneCoreManager *mgr, int check_for_proxies
 	int proxy_count;
 
 	/*BC_ASSERT_EQUAL(ms_list_size(linphone_core_get_proxy_config_list(lc)),proxy_count, int, "%d");*/
-	if (check_for_proxies) /**/
+	if (check_for_proxies){ /**/
 		proxy_count=ms_list_size(linphone_core_get_proxy_config_list(mgr->lc));
-	else
+	}else{
 		proxy_count=0;
+		/*this is to prevent registration to go on*/
+		linphone_core_set_network_reachable(mgr->lc, FALSE);
+	}
 
 	if (proxy_count){
 #define REGISTER_TIMEOUT 20 /* seconds */
@@ -350,8 +361,20 @@ void linphone_core_manager_start(LinphoneCoreManager *mgr, int check_for_proxies
 
 	proxy = linphone_core_get_default_proxy_config(mgr->lc);
 	if (proxy) {
+		if (mgr->identity){
+			linphone_address_destroy(mgr->identity);
+		}
 		mgr->identity = linphone_address_clone(linphone_proxy_config_get_identity_address(proxy));
 		linphone_address_clean(mgr->identity);
+	}
+
+	if (linphone_core_get_stun_server(mgr->lc) != NULL){
+		/*before we go, ensure that the stun server is resolved, otherwise all ice related test will fail*/
+		BC_ASSERT_TRUE(wait_for_stun_resolution(mgr));
+	}
+	if (!check_for_proxies){
+		/*now that stun server resolution is done, we can start registering*/
+		linphone_core_set_network_reachable(mgr->lc, TRUE);
 	}
 }
 
@@ -386,7 +409,7 @@ void linphone_core_manager_uninit(LinphoneCoreManager *mgr) {
 		int unterminated_calls;
 
 		if (!liblinphone_tester_keep_record_files && record_file){
-			if ((CU_get_number_of_failures()-mgr->number_of_cunit_error_at_creation)>0) {
+			if ((bc_get_number_of_failures()-mgr->number_of_cunit_error_at_creation)>0) {
 				ms_message ("Test has failed, keeping recorded file [%s]",record_file);
 			} else {
 				unlink(record_file);
@@ -401,7 +424,7 @@ void linphone_core_manager_uninit(LinphoneCoreManager *mgr) {
 	if (mgr->identity) {
 		linphone_address_destroy(mgr->identity);
 	}
-	
+
 	manager_count--;
 }
 
@@ -447,6 +470,7 @@ void liblinphone_tester_clear_accounts(void){
 void liblinphone_tester_add_suites() {
 	bc_tester_add_suite(&setup_test_suite);
 	bc_tester_add_suite(&register_test_suite);
+	bc_tester_add_suite(&tunnel_test_suite);
 	bc_tester_add_suite(&offeranswer_test_suite);
 	bc_tester_add_suite(&call_test_suite);
 	bc_tester_add_suite(&multi_call_test_suite);
@@ -461,7 +485,6 @@ void liblinphone_tester_add_suites() {
 	bc_tester_add_suite(&remote_provisioning_test_suite);
 	bc_tester_add_suite(&quality_reporting_test_suite);
 	bc_tester_add_suite(&log_collection_test_suite);
-	bc_tester_add_suite(&tunnel_test_suite);
 	bc_tester_add_suite(&player_test_suite);
 	bc_tester_add_suite(&dtmf_test_suite);
 #if defined(VIDEO_ENABLED) && defined(HAVE_GTK)
@@ -518,31 +541,48 @@ void liblinphone_tester_before_each(void) {
 
 static char* all_leaks_buffer = NULL;
 
-void liblinphone_tester_after_each(void) {
+int liblinphone_tester_after_each(void) {
 	if (!liblinphone_tester_leak_detector_disabled){
 		int leaked_objects = belle_sip_object_get_object_count() - leaked_objects_count;
 		if (leaked_objects > 0) {
 			char* format = ms_strdup_printf("%d object%s leaked in suite [%s] test [%s], please fix that!",
-											leaked_objects, leaked_objects>1?"s were":"was",
+											leaked_objects, leaked_objects>1?"s were":" was",
 											bc_tester_current_suite_name(), bc_tester_current_test_name());
 			belle_sip_object_dump_active_objects();
 			belle_sip_object_flush_active_objects();
-			bc_tester_printf(bc_printf_verbosity_info, format);
+			bc_tester_printf(ORTP_MESSAGE, format);
 			ms_error("%s", format);
 
 			all_leaks_buffer = ms_strcat_printf(all_leaks_buffer, "\n%s", format);
+		}
+
+		// prevent any future leaks
+		{
+			const char **tags = bc_tester_current_test_tags();
+			int leaks_expected =
+				(tags && ((tags[0] && !strcmp(tags[0], "LeaksMemory")) || (tags[1] && !strcmp(tags[1], "LeaksMemory"))));
+			// if the test is NOT marked as leaking memory and it actually is, we should make it fail
+			if (!leaks_expected && leaked_objects > 0) {
+				BC_FAIL("This test is leaking memory!");
+				return 1;
+				// and reciprocally
+			} else if (leaks_expected && leaked_objects == 0) {
+				BC_FAIL("This test is not leaking anymore, please remove LeaksMemory tag!");
+				return 1;
+			}
 		}
 	}
 
 	if (manager_count != 0) {
 		ms_fatal("%d Linphone core managers are still alive!", manager_count);
 	}
+	return 0;
 }
 
 void liblinphone_tester_uninit(void) {
 	// show all leaks that happened during the test
 	if (all_leaks_buffer) {
-		bc_tester_printf(bc_printf_verbosity_info, all_leaks_buffer);
+		bc_tester_printf(ORTP_MESSAGE, all_leaks_buffer);
 		ms_free(all_leaks_buffer);
 		all_leaks_buffer = NULL;
 	}
@@ -566,8 +606,8 @@ static void check_ice_from_rtp(LinphoneCall *c1, LinphoneCall *c2, LinphoneStrea
 		BC_ASSERT_FALSE(stream_type >= LinphoneStreamTypeUnknown);
 		return;
 	}
-	
-	
+
+
 	if (linphone_call_get_audio_stats(c1)->ice_state == LinphoneIceStateHostConnection && media_stream_started(ms)) {
 		char ip[16];
 		char port[8];
@@ -588,16 +628,16 @@ bool_t check_ice(LinphoneCoreManager* caller, LinphoneCoreManager* callee, Linph
 	bool_t text_success=FALSE;
 	bool_t video_enabled, realtime_text_enabled;
 	MSTimeSpec ts;
-	
+
 	c1=linphone_core_get_current_call(caller->lc);
 	c2=linphone_core_get_current_call(callee->lc);
-	
+
 	BC_ASSERT_PTR_NOT_NULL(c1);
 	BC_ASSERT_PTR_NOT_NULL(c2);
 	if (!c1 || !c2) return FALSE;
 	linphone_call_ref(c1);
 	linphone_call_ref(c2);
-	
+
 	BC_ASSERT_EQUAL(linphone_call_params_video_enabled(linphone_call_get_current_params(c1)),linphone_call_params_video_enabled(linphone_call_get_current_params(c2)), int, "%d");
 	BC_ASSERT_EQUAL(linphone_call_params_realtime_text_enabled(linphone_call_get_current_params(c1)),linphone_call_params_realtime_text_enabled(linphone_call_get_current_params(c2)), int, "%d");
 	video_enabled=linphone_call_params_video_enabled(linphone_call_get_current_params(c1));
@@ -617,7 +657,7 @@ bool_t check_ice(LinphoneCoreManager* caller, LinphoneCoreManager* callee, Linph
 		}
 		ms_usleep(20000);
 	}while(!liblinphone_tester_clock_elapsed(&ts,10000));
-	
+
 	if (video_enabled){
 		liblinphone_tester_clock_start(&ts);
 		do{
@@ -635,7 +675,7 @@ bool_t check_ice(LinphoneCoreManager* caller, LinphoneCoreManager* callee, Linph
 			ms_usleep(20000);
 		}while(!liblinphone_tester_clock_elapsed(&ts,10000));
 	}
-	
+
 	if (realtime_text_enabled){
 		liblinphone_tester_clock_start(&ts);
 		do{
@@ -653,7 +693,7 @@ bool_t check_ice(LinphoneCoreManager* caller, LinphoneCoreManager* callee, Linph
 			ms_usleep(20000);
 		}while(!liblinphone_tester_clock_elapsed(&ts,10000));
 	}
-	
+
 	/*make sure encryption mode are preserved*/
 	if (c1) {
 		const LinphoneCallParams* call_param = linphone_call_get_current_params(c1);
@@ -671,28 +711,27 @@ bool_t check_ice(LinphoneCoreManager* caller, LinphoneCoreManager* callee, Linph
 static void linphone_conference_server_call_state_changed(LinphoneCore *lc, LinphoneCall *call, LinphoneCallState cstate, const char *msg) {
 	LinphoneCoreVTable *vtable = linphone_core_get_current_vtable(lc);
 	LinphoneConferenceServer *conf_srv = (LinphoneConferenceServer *)vtable->user_data;
-	
+
 	switch(cstate) {
 		case LinphoneCallIncomingReceived:
 			linphone_core_accept_call(lc, call);
 			break;
-			
+
 		case LinphoneCallStreamsRunning:
 			if(linphone_call_get_conference(call) == NULL) {
 				linphone_core_add_to_conference(lc, call);
 				linphone_core_leave_conference(lc);
-				if(conf_srv->first_call == NULL) conf_srv->first_call = linphone_call_ref(call);
+				if(conf_srv->first_call == NULL) conf_srv->first_call = call;
 			}
 			break;
-			
+
 		case LinphoneCallEnd:
 			if(call == conf_srv->first_call) {
 				linphone_core_terminate_conference(lc);
-				linphone_call_unref(call);
 				conf_srv->first_call = NULL;
 			}
 			break;
-			
+
 		default: break;
 	}
 }
@@ -702,7 +741,7 @@ static void linphone_conference_server_refer_received(LinphoneCore *core, const 
 	LinphoneAddress *refer_to_addr = linphone_address_new(refer_to);
 	char *uri;
 	LinphoneCall *call;
-	
+
 	if(refer_to_addr == NULL) return;
 	strncpy(method, linphone_address_get_method_param(refer_to_addr), sizeof(method));
 	if(strcmp(method, "BYE") == 0) {
@@ -729,7 +768,7 @@ static void linphone_conference_server_registration_state_changed(LinphoneCore *
 LinphoneConferenceServer* linphone_conference_server_new(const char *rc_file, bool_t do_registration) {
 	LinphoneConferenceServer *conf_srv = (LinphoneConferenceServer *)ms_new0(LinphoneConferenceServer, 1);
 	LinphoneCoreManager *lm = (LinphoneCoreManager *)conf_srv;
-	
+
 	conf_srv->vtable = linphone_core_v_table_new();
 	conf_srv->vtable->call_state_changed = linphone_conference_server_call_state_changed;
 	conf_srv->vtable->refer_received = linphone_conference_server_refer_received;

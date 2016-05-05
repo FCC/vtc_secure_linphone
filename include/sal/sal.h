@@ -330,7 +330,9 @@ bool_t sal_media_description_has_srtp(const SalMediaDescription *md);
 bool_t sal_media_description_has_dtls(const SalMediaDescription *md);
 int sal_media_description_get_nb_active_streams(const SalMediaDescription *md);
 
-
+struct SalOpBase;
+typedef void (*SalOpReleaseCb)(struct SalOpBase *op);
+	
 /*this structure must be at the first byte of the SalOp structure defined by implementors*/
 typedef struct SalOpBase{
 	Sal *root;
@@ -354,7 +356,8 @@ typedef struct SalOpBase{
 	SalAddress* service_route; /*as defined by rfc3608, might be a list*/
 	SalCustomHeader *sent_custom_headers;
 	SalCustomHeader *recv_custom_headers;
-	char* entity_tag; /*as defined by rfc3903 (I.E publih)*/ 
+	char* entity_tag; /*as defined by rfc3903 (I.E publih)*/
+	SalOpReleaseCb release_cb;
 } SalOpBase;
 
 
@@ -587,6 +590,7 @@ int sal_listen_port(Sal *ctx, const char *addr, int port, SalTransport tr, int i
 int sal_get_listening_port(Sal *ctx, SalTransport tr);
 int sal_unlisten_ports(Sal *ctx);
 LINPHONE_PUBLIC int sal_transport_available(Sal *ctx, SalTransport t);
+LINPHONE_PUBLIC bool_t sal_content_encoding_available(Sal *ctx, const char *content_encoding);
 void sal_set_dscp(Sal *ctx, int dscp);
 void sal_set_supported_tags(Sal *ctx, const char* tags);
 void sal_add_supported_tag(Sal *ctx, const char* tag);
@@ -618,6 +622,7 @@ void sal_set_root_ca(Sal* ctx, const char* rootCa);
 const char *sal_get_root_ca(Sal* ctx);
 void sal_verify_server_certificates(Sal *ctx, bool_t verify);
 void sal_verify_server_cn(Sal *ctx, bool_t verify);
+void sal_set_ssl_config(Sal *ctx, void *ssl_config);
 void sal_set_uuid(Sal*ctx, const char *uuid);
 int sal_create_uuid(Sal*ctx, char *uuid, size_t len);
 int sal_generate_uuid(char *uuid, size_t len);
@@ -644,7 +649,7 @@ void sal_op_set_to_address(SalOp *op, const SalAddress *to);
 SalOp *sal_op_ref(SalOp* h);
 void sal_op_stop_refreshing(SalOp *op);
 int sal_op_refresh(SalOp *op);
-	
+
 void sal_op_release(SalOp *h);
 /*same as release, but does not stop refresher if any*/
 void* sal_op_unref(SalOp* op);
@@ -690,7 +695,7 @@ void sal_error_info_set(SalErrorInfo *ei, SalReason reason, int code, const char
 /*entity tag used for publish (see RFC 3903)*/
 const char *sal_op_get_entity_tag(const SalOp* op);
 void sal_op_set_entity_tag(SalOp *op, const char* entity_tag);
-	
+
 /*Call API*/
 int sal_call_set_local_media_description(SalOp *h, SalMediaDescription *desc);
 int sal_call(SalOp *h, const char *from, const char *to);
@@ -749,7 +754,7 @@ int sal_notify_presence_close(SalOp *op);
 /*presence publish */
 //int sal_publish_presence(SalOp *op, const char *from, const char *to, int expires, SalPresenceModel *presence);
 SalBodyHandler *sal_presence_model_create_body_handler(SalPresenceModel *presence);
-	
+
 
 /*ping: main purpose is to obtain its own contact address behind firewalls*/
 int sal_ping(SalOp *op, const char *from, const char *to);
@@ -766,7 +771,7 @@ int sal_notify(SalOp *op, const SalBodyHandler *body);
 int sal_notify_close(SalOp *op);
 int sal_publish(SalOp *op, const char *from, const char *to, const char*event_name, int expires, const SalBodyHandler *body);
 int sal_op_unpublish(SalOp *op);
-	
+
 /*privacy, must be in sync with LinphonePrivacyMask*/
 typedef enum _SalPrivacy {
 	SalPrivacyNone=0x0,
@@ -795,7 +800,7 @@ typedef void (*SalResolverCallback)(void *data, const char *name, struct addrinf
 
 typedef struct SalResolverContext SalResolverContext;
 
-SalResolverContext * sal_resolve_a(Sal* sal, const char *name, int port, int family, SalResolverCallback cb, void *data);
+LINPHONE_PUBLIC SalResolverContext * sal_resolve_a(Sal* sal, const char *name, int port, int family, SalResolverCallback cb, void *data);
 //void sal_resolve_cancel(Sal *sal, SalResolverContext *ctx);
 
 SalCustomHeader *sal_custom_header_append(SalCustomHeader *ch, const char *name, const char *value);
