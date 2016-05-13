@@ -1649,6 +1649,14 @@ extern "C" jboolean Java_org_linphone_core_LinphoneCoreImpl_isInCall(JNIEnv* env
 
 	return (jboolean)linphone_core_in_call((LinphoneCore*)lc);
 }
+
+extern "C" jboolean Java_org_linphone_core_LinphoneFriendImpl_isPresenceReceived(JNIEnv* env
+		,jobject  thiz
+		,jlong lf) {
+
+	return (jboolean)linphone_friend_is_presence_received((LinphoneFriend*)lf);
+}
+
 extern "C" jboolean Java_org_linphone_core_LinphoneCoreImpl_isInComingInvitePending(JNIEnv* env
 		,jobject  thiz
 		,jlong lc) {
@@ -3713,10 +3721,12 @@ extern "C" jobjectArray _LinphoneChatRoomImpl_getHistory(JNIEnv* env, jobject th
 			env->SetObjectArrayElement(jHistory, i, jmsg);
 			env->DeleteLocalRef(jmsg);
 		}
+		
 		history = history->next;
 	}
-
-	ms_list_free(list);
+	/*getChatMessage() acquired a ref that is "transfered" to the java object. We must drop
+		* the reference given by linphone_chat_room_get_history_range()*/
+	ms_list_free_with_data(list, (void (*)(void*))linphone_chat_message_unref);
 	return jHistory;
 }
 extern "C" jobjectArray Java_org_linphone_core_LinphoneChatRoomImpl_getHistoryRange(JNIEnv*  env
@@ -5314,9 +5324,16 @@ JNIEXPORT jobject JNICALL Java_org_linphone_core_LinphoneCoreImpl_publish(JNIEnv
 
 // LpConfig
 extern "C" jlong Java_org_linphone_core_LpConfigImpl_newLpConfigImpl(JNIEnv *env, jobject thiz, jstring file) {
-		const char *cfile = env->GetStringUTFChars(file, NULL);
-		LpConfig *lp = lp_config_new(cfile);
+	const char *cfile = env->GetStringUTFChars(file, NULL);
+	LpConfig *lp = lp_config_new(cfile);
 	env->ReleaseStringUTFChars(file, cfile);
+	return (jlong) lp;
+}
+
+extern "C" jlong Java_org_linphone_core_LpConfigImpl_newLpConfigImplFromBuffer(JNIEnv *env, jobject thiz, jstring buffer) {
+	const char *cbuffer = env->GetStringUTFChars(buffer, NULL);
+	LpConfig *lp = lp_config_new_from_buffer(cbuffer);
+	env->ReleaseStringUTFChars(buffer, cbuffer);
 	return (jlong) lp;
 }
 

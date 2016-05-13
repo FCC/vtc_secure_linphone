@@ -1701,7 +1701,7 @@ static void linphone_core_internal_notify_received(LinphoneCore *lc, LinphoneEve
 		const MSList* friendLists = linphone_core_get_friends_lists(lc);
 		while( friendLists != NULL ){
 			LinphoneFriendList* list = friendLists->data;
-			ms_warning("notify presence for list %p", list);
+			ms_message("notify presence for list %p", list);
 			linphone_friend_list_notify_presence_received(list, lev, body);
 			friendLists = friendLists->next;
 		}
@@ -1760,7 +1760,10 @@ static void linphone_core_init(LinphoneCore * lc, const LinphoneCoreVTable *vtab
 	lc->network_last_check = 0;
 	lc->network_last_status = FALSE;
 
-	lc->http_provider = belle_sip_stack_create_http_provider(sal_get_belle_sip_stack(lc->sal), "0.0.0.0");
+	/* Create the http provider in dual stack mode (ipv4 and ipv6.
+	 * If this creates problem, we may need to implement parallel ipv6/ ipv4 http requests in belle-sip.
+	 */
+	lc->http_provider = belle_sip_stack_create_http_provider(sal_get_belle_sip_stack(lc->sal), "::0");
 	lc->http_crypto_config = belle_tls_crypto_config_new();
 	belle_http_provider_set_tls_crypto_config(lc->http_provider,lc->http_crypto_config);
 
@@ -2673,10 +2676,8 @@ void linphone_core_iterate(LinphoneCore *lc){
 	}
 	if (linphone_core_get_global_state(lc) == LinphoneGlobalStartup) {
 		if (sal_get_root_ca(lc->sal)) {
-			belle_tls_crypto_config_t *crypto_config = belle_tls_crypto_config_new();
-			belle_tls_crypto_config_set_root_ca(crypto_config, sal_get_root_ca(lc->sal));
-			belle_http_provider_set_tls_crypto_config(lc->http_provider, crypto_config);
-			belle_sip_object_unref(crypto_config);
+			belle_tls_crypto_config_set_root_ca(lc->http_crypto_config, sal_get_root_ca(lc->sal));
+			belle_http_provider_set_tls_crypto_config(lc->http_provider, lc->http_crypto_config);
 		}
 
 		linphone_core_notify_display_status(lc, _("Configuring"));
@@ -6854,6 +6855,11 @@ LinphonePayloadType* linphone_core_find_payload_type(LinphoneCore* lc, const cha
 		result = find_payload_type_from_list(type, rate, 0, linphone_core_get_video_codecs(lc));
 		if (result) {
 			return result;
+		} else {
+			result = find_payload_type_from_list(type, rate, 0, linphone_core_get_text_codecs(lc));
+			if (result) {
+				return result;
+			}
 		}
 	}
 	/*not found*/
