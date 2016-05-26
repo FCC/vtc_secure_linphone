@@ -197,7 +197,6 @@ void _linphone_proxy_config_release_ops(LinphoneProxyConfig *cfg){
 		cfg->op=NULL;
 	}
 	if (cfg->long_term_event){
-		linphone_event_terminate(cfg->long_term_event);
 		linphone_event_unref(cfg->long_term_event);
 		cfg->long_term_event=NULL;
 	}
