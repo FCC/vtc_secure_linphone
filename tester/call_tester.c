@@ -6155,6 +6155,7 @@ test_t call_tests[] = {
 	TEST_NO_TAG("Call with http proxy", call_with_http_proxy),
 	TEST_NO_TAG("Call with timeouted bye", call_with_timeouted_bye),
 	TEST_NO_TAG("Direct call over IPv6", direct_call_over_ipv6),
+	TEST_NO_TAG("IPv6 call over NAT64", v6_call_over_nat_64),
 	TEST_NO_TAG("Outbound call with multiple proxy possible", call_outbound_with_multiple_proxy),
 	TEST_NO_TAG("Audio call recording", audio_call_recording_test),
 #if 0 /* not yet activated because not implemented */

@@ -1171,7 +1171,13 @@ void linphone_call_set_compatible_incoming_call_parameters(LinphoneCall *call, S
 	}else if (call->params->media_encryption != LinphoneMediaEncryptionZRTP){
 		call->params->media_encryption = LinphoneMediaEncryptionNone;
 	}
-	linphone_call_fix_call_parameters(call, md);
+	
+	/*in case of nat64, even ipv4 addresses are reachable from v6. Should be enhanced to manage stream by stream connectivity (I.E v6 or v4)*/
+	/*if (!sal_media_description_has_ipv6(md)){
+		ms_message("The remote SDP doesn't seem to offer any IPv6 connectivity, so disabling IPv6 for this call.");
+		call->af = AF_INET;
+	}*/
+    linphone_call_fix_call_parameters(call, md);
 }
 
 static void linphone_call_compute_streams_indexes(LinphoneCall *call, const SalMediaDescription *md) {
