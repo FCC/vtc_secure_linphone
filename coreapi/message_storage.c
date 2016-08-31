@@ -43,6 +43,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "sqlite3.h"
 #include <assert.h>
 
+//to skip unused method exception during build for android
+#if defined(ANDROID) || defined(__QNXNTO__)
+#else
 static char *utf8_convert(const char *filename){
 	char db_file_utf8[MAX_PATH_SIZE] = "";
 #if defined(_WIN32)
@@ -66,11 +69,16 @@ static char *utf8_convert(const char *filename){
 #endif
 	return ms_strdup(db_file_utf8);
 }
+#endif
 
 
 int _linphone_sqlite3_open(const char *db_file, sqlite3 **db) {
 	char* errmsg = NULL;
 	int ret;
+#if defined(ANDROID) || defined(__QNXNTO__)
+    ret = sqlite3_open(db_file, db);
+#else
+
 	int flags = SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE;
 
 #if TARGET_OS_IPHONE
@@ -83,7 +91,7 @@ int _linphone_sqlite3_open(const char *db_file, sqlite3 **db) {
 	//ret = sqlite3_open_v2(utf8_filename, db, flags, LINPHONE_SQLITE3_VFS);
 	ret = sqlite3_open_v2(utf8_filename, db, flags, NULL); // Do not use VFS until all issues are resolved
 	ms_free(utf8_filename);
-
+#endif
 	if (ret != SQLITE_OK) return ret;
 	// Some platforms do not provide a way to create temporary files which are needed
 	// for transactions... so we work in memory only
