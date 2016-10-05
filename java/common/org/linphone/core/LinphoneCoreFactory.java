@@ -18,7 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 package org.linphone.core;
 
-
+import org.linphone.tools.OpenH264DownloadHelper;
 
 
 
@@ -125,6 +125,12 @@ abstract public class LinphoneCoreFactory {
 	
 	abstract public void setLogHandler(LinphoneLogHandler handler);
 	
+        /**
+         * Must be calling after the LinphoneCore creation
+         * @return a new OpenH264DownloadHelper
+         */
+        abstract public OpenH264DownloadHelper createOpenH264DownloadHelper();
+
 	/**
 	 * Create a LinphoneFriend, similar to {@link #createLinphoneFriend()} + {@link LinphoneFriend#setAddress(LinphoneAddress)} 
 	 * @param friendUri a buddy address, must be a sip uri like sip:joe@sip.linphone.org

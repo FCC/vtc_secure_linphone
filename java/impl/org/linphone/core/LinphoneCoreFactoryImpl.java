@@ -18,12 +18,15 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 package org.linphone.core;
 
+import android.content.Context;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
 import org.linphone.mediastream.MediastreamerAndroidContext;
 import org.linphone.mediastream.Version;
+import org.linphone.tools.OpenH264DownloadHelper;
 
 public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 
@@ -91,12 +94,23 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	public LpConfig createLpConfigFromString(String buffer) {
 		return LpConfigImpl.fromBuffer(buffer);
 	}
-
+	
+	private void loadOpenH264(Context context) {
+                OpenH264DownloadHelper downloadHelper = new OpenH264DownloadHelper(context);
+                if (downloadHelper.isCodecFound()) {
+                        org.linphone.mediastream.Log.i("LinphoneCoreFactoryImpl"," Loading OpenH264 plugin:" + downloadHelper.getFullPathLib());
+                        System.load(downloadHelper.getFullPathLib());
+                } else {
+                        org.linphone.mediastream.Log.i("LinphoneCoreFactoryImpl"," Cannot load OpenH264 plugin");
+                }
+        }
+	
 	@Override
 	public LinphoneCore createLinphoneCore(LinphoneCoreListener listener,
 			String userConfig, String factoryConfig, Object userdata, Object context)
 			throws LinphoneCoreException {
 		try {
+			loadOpenH264((Context)context);
 			MediastreamerAndroidContext.setContext(context);
 			File user = userConfig == null ? null : new File(userConfig);
 			File factory = factoryConfig == null ? null : new File(factoryConfig);
@@ -129,6 +143,16 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	public void setLogHandler(LinphoneLogHandler handler) {
 		_setLogHandler(handler);
 	}
+       
+        @Override
+        public OpenH264DownloadHelper createOpenH264DownloadHelper() {
+                if (context == null) {
+                        new LinphoneCoreException("Cannot create OpenH264DownloadHelper");
+                        return null;//exception
+                }
+                return new OpenH264DownloadHelper(context);
+        }
+
 
 	@Override
 	public LinphoneFriend createLinphoneFriend(String friendUri) {
