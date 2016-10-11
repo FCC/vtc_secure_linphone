@@ -10,7 +10,7 @@ of the License, or (at your option) any later version.
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+GNU General Public License fo r more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
@@ -35,7 +35,8 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 			System.loadLibrary(s);
 			return true;
 		} catch (Throwable e) {
-			//android.util.Log.w("LinphoneCoreFactoryImpl", "Unable to load optional library lib" + s);
+			android.util.Log.w("LinphoneCoreFactoryImpl", "Unable to load optional library " + s
+					+ ": " +e.getMessage());
 		}
 		return false;
 	}
@@ -44,6 +45,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 		List<String> cpuabis=Version.getCpuAbis();
 		boolean libLoaded=false;
 		Throwable firstException=null;
+		System.loadLibrary("gnustl_shared");
 		for (String abi : cpuabis){
 			//android.util.Log.i("LinphoneCoreFactoryImpl","Trying to load liblinphone for " + abi);
 			loadOptionalLibrary("ffmpeg-linphone-" + abi);
@@ -61,10 +63,10 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 				if (firstException == null) firstException=e;
 			}
 		}
-		
+
 		if (!libLoaded){
 			throw new RuntimeException(firstException);
-			
+
 		}else{
 			Version.dumpCapabilities();
 		}
@@ -85,32 +87,30 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	public LinphoneAddress createLinphoneAddress(String identity) throws LinphoneCoreException {
 		return new LinphoneAddressImpl(identity);
 	}
-	
+
 	@Override
 	public LpConfig createLpConfig(String file) {
 		return LpConfigImpl.fromFile(file);
 	}
-	
+
 	public LpConfig createLpConfigFromString(String buffer) {
 		return LpConfigImpl.fromBuffer(buffer);
 	}
-	
+
 	private void loadOpenH264(Context context) {
-                OpenH264DownloadHelper downloadHelper = new OpenH264DownloadHelper(context);
-                if (downloadHelper.isCodecFound()) {
-                        org.linphone.mediastream.Log.i("LinphoneCoreFactoryImpl"," Loading OpenH264 plugin:" + downloadHelper.getFullPathLib());
-                        System.load(downloadHelper.getFullPathLib());
-                } else {
-                        org.linphone.mediastream.Log.i("LinphoneCoreFactoryImpl"," Cannot load OpenH264 plugin");
-                }
-        }
-	
+		fcontext = context;
+		OpenH264DownloadHelper downloadHelper = new OpenH264DownloadHelper(fcontext);
+		if(downloadHelper != null && downloadHelper.isCodecFound()) {
+			System.load(downloadHelper.getFullPathLib());
+		}
+	}
+
 	@Override
 	public LinphoneCore createLinphoneCore(LinphoneCoreListener listener,
 			String userConfig, String factoryConfig, Object userdata, Object context)
 			throws LinphoneCoreException {
 		try {
-			loadOpenH264((Context)context);
+			loadOpenH264((Context) context);
 			MediastreamerAndroidContext.setContext(context);
 			File user = userConfig == null ? null : new File(userConfig);
 			File factory = factoryConfig == null ? null : new File(factoryConfig);
@@ -125,6 +125,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	@Override
 	public LinphoneCore createLinphoneCore(LinphoneCoreListener listener, Object context) throws LinphoneCoreException {
 		try {
+			loadOpenH264((Context) context);
 			MediastreamerAndroidContext.setContext(context);
 			LinphoneCore lc = new LinphoneCoreImpl(listener);
 			if(context!=null) lc.setContext(context);
@@ -137,22 +138,21 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	@Override
 	public native void setDebugMode(boolean enable, String tag);
 
-	
+
 	private native void _setLogHandler(Object handler);
 	@Override
 	public void setLogHandler(LinphoneLogHandler handler) {
 		_setLogHandler(handler);
 	}
-       
-        @Override
-        public OpenH264DownloadHelper createOpenH264DownloadHelper() {
-                if (context == null) {
-                        new LinphoneCoreException("Cannot create OpenH264DownloadHelper");
-                        return null;//exception
-                }
-                return new OpenH264DownloadHelper(context);
-        }
 
+	@Override
+	public OpenH264DownloadHelper createOpenH264DownloadHelper() {
+		if (fcontext == null) {
+			new LinphoneCoreException("Cannot create LinphoneCore");
+			return null;//exception
+		}
+		return new OpenH264DownloadHelper(fcontext);
+	}
 
 	@Override
 	public LinphoneFriend createLinphoneFriend(String friendUri) {
@@ -163,7 +163,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	public LinphoneFriend createLinphoneFriend() {
 		return createLinphoneFriend(null);
 	}
-	
+
 	@Override
 	public native void enableLogCollection(boolean enable);
 
@@ -186,7 +186,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 			byte [] data, String encoding) {
 		return new LinphoneContentImpl(type,subType,data,encoding);
 	}
-	
+
 	@Override
 	public LinphoneContent createLinphoneContent(String type, String subType,
 			String data) {
