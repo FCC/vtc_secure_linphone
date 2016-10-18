@@ -168,7 +168,7 @@ public class OpenH264DownloadHelper {
      * @return file exists ?
      */
     public boolean isCodecFound() {
-        return getMD5Checksum(fileDirection+"/" + nameLib).equals("md5");
+        return getMD5Checksum(fileDirection+"/" + nameLib).equals(md5);
     }
 
 	/**
