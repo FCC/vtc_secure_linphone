@@ -46,13 +46,13 @@ public class OpenH264DownloadHelper {
     private String urlDownload;
     private String nameFileDownload;
     private String licenseMessage;
-    private String md5 = "e12d6105672502926a511cd3d18ccd7f";
+    private String md5 = "b74e2afd04695908231fcca5c2457553";
 	/**
      * Default values
      * nameLib = "libopenh264-1.5.so"
      * urlDownload = "http://ciscobinary.openh264.org/libopenh264-1.5.0-android19.so.bz2"
      * nameFileDownload = "libopenh264-1.5.0-android19.so.bz2"
-     * md5 = "e12d6105672502926a511cd3d18ccd7f"
+     * md5 = "b74e2afd04695908231fcca5c2457553"
      */
     public OpenH264DownloadHelper(Context context) {
         userData = new ArrayList<Object>();
