@@ -942,8 +942,10 @@ void linphone_core_real_time_text_received(LinphoneCore *lc, LinphoneChatRoom *c
 			cr->received_rtt_characters = ms_list_free(cr->received_rtt_characters);
 		} else {
 			char *value = utf8_to_char(character);
-			cr->pending_message->message = ms_strcat_printf(cr->pending_message->message, value);
+			/***PUC-1932***/
+			/*cr->pending_message->message = ms_strcat_printf(cr->pending_message->message, value);
 			ms_debug("Received RTT character: %s (%lu), pending text is %s", value, (unsigned long)character, cr->pending_message->message);
+			*/
 			ms_free(value);
 		}
 	}
