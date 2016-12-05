@@ -192,6 +192,8 @@ class LinphoneCoreImpl implements LinphoneCore {
 	private native void reloadMsPlugins(long nativePtr, String path);
 	private native void reloadSoundDevices(long nativePtr);
 	private native void setDefaultSoundDevices(long nativePtr);
+	private native Object createFriend(long nativePtr);
+	private native Object createFriendWithAddress(long nativePtr, String address);
 
 	LinphoneCoreImpl(LinphoneCoreListener listener, File userConfig, File factoryConfig, Object userdata) throws IOException {
 		mListener = listener;
@@ -278,7 +280,9 @@ class LinphoneCoreImpl implements LinphoneCore {
 	}
 	public synchronized void removeProxyConfig(LinphoneProxyConfig proxyCfg) {
 		isValid();
-		removeProxyConfig(nativePtr, ((LinphoneProxyConfigImpl) proxyCfg).nativePtr);
+		if (proxyCfg != null) {
+			removeProxyConfig(nativePtr, ((LinphoneProxyConfigImpl) proxyCfg).nativePtr);
+		}
 	}
 	public synchronized void clearAuthInfos() {
 		isValid();
@@ -1787,5 +1791,13 @@ class LinphoneCoreImpl implements LinphoneCore {
 
 	public boolean openH264Enabled() {
 		return openh264Enabled;
+	}
+
+	public LinphoneFriend createFriend() {
+		return (LinphoneFriend) createFriend(nativePtr);
+	}
+
+	public LinphoneFriend createFriendWithAddress(String address) {
+		return (LinphoneFriend) createFriendWithAddress(nativePtr, address);
 	}
 }

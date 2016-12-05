@@ -22,34 +22,6 @@ BUILT_SOURCES=$(GITVERSION_FILE)
 CLEANFILES=$(GITVERSION_FILE)
 
 ## Process this file with automake to produce Makefile.in
-linphone_includedir=$(includedir)/linphone
-
-linphone_include_HEADERS=\
-	account_creator.h \
-	buffer.h \
-	call_log.h \
-	call_params.h \
-	conference.h \
-	content.h \
-	event.h \
-	friendlist.h \
-	linphonecore.h \
-	linphonecore_utils.h \
-	ringtoneplayer.h \
-	linphonefriend.h \
-	linphonepresence.h \
-	linphone_proxy_config.h \
-	linphone_tunnel.h \
-	lpc2xml.h \
-	lpconfig.h \
-	nat_policy.h \
-	sipsetup.h \
-	sqlite3_bctbx_vfs.h \
-	xml2lpc.h \
-	xmlrpc.h \
-	vcard.h \
-	carddav.h
-
 lib_LTLIBRARIES=liblinphone.la
 
 liblinphone_la_SOURCES=\
@@ -58,12 +30,13 @@ liblinphone_la_SOURCES=\
 	authentication.c \
 	buffer.c \
 	callbacks.c \
+	carddav.h \
 	call_log.c \
 	call_params.c \
 	chat.c \
 	chat_file_transfer.c \
 	conference.cc conference_private.h \
-	contactprovider.c contactprovider.h contact_providers_priv.h \
+	contactprovider.c contact_providers_priv.h \
 	content.c \
 	dial_plan.c \
 	dict.c \
@@ -74,11 +47,11 @@ liblinphone_la_SOURCES=\
 	friend.c \
 	friendlist.c \
 	info.c \
-	ldap/ldapprovider.c ldap/ldapprovider.h \
+	ldapprovider.c \
 	linphonecall.c \
 	linphonecore.c \
 	localplayer.c \
-	lpc2xml.c \
+	lpc2xml.c lpc2xml.h \
 	lime.c lime.h\
 	lpconfig.c \
 	lsd.c \
@@ -95,12 +68,13 @@ liblinphone_la_SOURCES=\
 	sal.c \
 	siplogin.c \
 	sipsetup.c \
-	xml2lpc.c \
+	vcard_private.h \
+	xml2lpc.c xml2lpc.h \
 	xml.c \
 	xmlrpc.c \
 	vtables.c \
 	carddav.c \
-	ringtoneplayer.c ringtoneplayer.h\
+	ringtoneplayer.c \
 	sqlite3_bctbx_vfs.c sqlite3_bctbx_vfs.h\
 	$(GITVERSION_FILE)
 
@@ -123,9 +97,9 @@ liblinphone_la_SOURCES+=	bellesip_sal/sal_address_impl.c \
 
 liblinphone_la_SOURCES+=linphone_tunnel_config.c
 if BUILD_TUNNEL
-liblinphone_la_SOURCES+=linphone_tunnel.cc TunnelManager.cc TunnelManager.hh linphone_tunnel.h
+liblinphone_la_SOURCES+=linphone_tunnel.cc TunnelManager.cc TunnelManager.hh
 else
-liblinphone_la_SOURCES+=linphone_tunnel_stubs.c linphone_tunnel.h
+liblinphone_la_SOURCES+=linphone_tunnel_stubs.c
 endif
 
 if BUILD_VCARD
@@ -165,7 +139,6 @@ liblinphone_la_LIBADD= \
 
 
 AM_CPPFLAGS=\
-	-DIN_LINPHONE \
 	-I$(top_srcdir) -I$(top_srcdir)/include -I$(builddir) \
 	$(ORTP_CFLAGS) \
 	$(MEDIASTREAMER_CFLAGS) \
@@ -173,7 +146,6 @@ AM_CPPFLAGS=\
 
 COMMON_CFLAGS=\
 	$(STRICT_OPTIONS) \
-	-DIN_LINPHONE \
 	$(SIPSTACK_CFLAGS) \
 	-DENABLE_TRACE \
 	-DLOG_DOMAIN=\"LinphoneCore\" \

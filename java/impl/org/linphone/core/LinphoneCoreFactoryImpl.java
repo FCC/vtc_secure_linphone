@@ -19,6 +19,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 package org.linphone.core;
 
 import android.content.Context;
+import android.os.Build;
 
 import java.io.File;
 import java.io.IOException;
@@ -102,7 +103,8 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 	private boolean loadOpenH264(Context context) {
 		File file = new File(context.getFilesDir()+"/../lib/libmsopenh264.so");
 
-		if (!file.exists()) {
+		// Only enable for android <= 5.0
+		if (!file.exists() || Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
 			Log.i("LinphoneCoreFactoryImpl"," Openh264 disabled on the project");
 			return false;
 		}
@@ -130,6 +132,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 			File factory = factoryConfig == null ? null : new File(factoryConfig);
 			LinphoneCore lc = new LinphoneCoreImpl(listener, user, factory, userdata);
 			lc.enableOpenH264(openh264Enabled);
+			if(context!=null) lc.setContext(context);
 			return lc;
 		} catch (IOException e) {
 			throw new LinphoneCoreException("Cannot create LinphoneCore",e);
@@ -144,6 +147,7 @@ public class LinphoneCoreFactoryImpl extends LinphoneCoreFactory {
 			MediastreamerAndroidContext.setContext(context);
 			LinphoneCore lc = new LinphoneCoreImpl(listener);
 			lc.enableOpenH264(openh264Enabled);
+			if(context!=null) lc.setContext(context);
 			return lc;
 		} catch (IOException e) {
 			throw new LinphoneCoreException("Cannot create LinphoneCore",e);

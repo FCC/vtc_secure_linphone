@@ -15,8 +15,8 @@
  */
 
 #include "contact_providers_priv.h"
-#include "contactprovider.h"
-#include <linphonecore.h>
+#include "linphone/contactprovider.h"
+#include <linphone/core.h>
 
 /* ############################ *
  * LinphoneContactSearchRequest *

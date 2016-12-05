@@ -38,9 +38,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 // alloca is already defined by gtk
 #undef alloca
 #endif
-#include "linphonecore.h"
+#include "linphone/core.h"
 
-#include "ldap/ldapprovider.h"
+#include "linphone/ldapprovider.h"
 
 #ifdef ENABLE_NLS
 

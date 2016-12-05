@@ -1,5 +1,5 @@
 /***************************************************************************
- *            linphone_tunnel.h
+ *            tunnel.h
  *
  *  Fri Dec 9, 2011
  *  Copyright  2011  Belledonne Communications
@@ -26,7 +26,7 @@
 #ifndef LINPHONETUNNEL_H
 #define LINPHONETUNNEL_H
 
-#include "linphonecore.h"
+#include "linphone/core.h"
 
 
 /**

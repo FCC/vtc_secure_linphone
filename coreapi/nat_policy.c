@@ -17,7 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "linphonecore.h"
+#include "linphone/core.h"
 #include "private.h"
 
 
@@ -41,6 +41,7 @@ static void linphone_nat_policy_destroy(LinphoneNatPolicy *policy) {
 	if (policy->stun_addrinfo) bctbx_freeaddrinfo(policy->stun_addrinfo);
 	if (policy->stun_resolver_context) {
 		sal_resolve_cancel(policy->stun_resolver_context);
+		sal_resolver_context_unref(policy->stun_resolver_context);
 	}
 }
 

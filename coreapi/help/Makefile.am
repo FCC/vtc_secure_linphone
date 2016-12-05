@@ -92,10 +92,9 @@ LINPHONE_TUTOS+=$(realtimetext_receiver_SOURCES)
 realtimetext_receiver_LDADD=$(helloworld_LDADD)
 
 AM_CFLAGS=\
-	-I$(top_srcdir)/coreapi \
+	-I$(top_srcdir)/include \
 	$(STRICT_OPTIONS) \
 	$(STRICT_OPTIONS_CC) \
-	-DIN_LINPHONE \
 	$(ORTP_CFLAGS) \
 	$(MEDIASTREAMER_CFLAGS) \
 	-DENABLE_TRACE 	\

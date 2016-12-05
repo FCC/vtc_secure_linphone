@@ -17,7 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "linphonecore.h"
+#include "linphone/core.h"
 #include "private.h"
 
 #include <bctoolbox/crypto.h>
@@ -361,7 +361,6 @@ static LinphoneFriendList * linphone_friend_list_new(void) {
 	LinphoneFriendList *list = belle_sip_object_new(LinphoneFriendList);
 	list->cbs = linphone_friend_list_cbs_new();
 	list->enable_subscriptions = TRUE;
-	belle_sip_object_ref(list);
 	return list;
 }
 
@@ -387,7 +386,7 @@ BELLE_SIP_INSTANCIATE_VPTR(LinphoneFriendList, belle_sip_object_t,
 	(belle_sip_object_destroy_t)linphone_friend_list_destroy,
 	NULL, // clone
 	NULL, // marshal
-	TRUE
+	FALSE
 );
 
 

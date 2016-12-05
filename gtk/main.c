@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #define VIDEOSELFVIEW_DEFAULT 0
 
 #include "linphone.h"
-#include "lpconfig.h"
+#include "linphone/lpconfig.h"
 #include "liblinphone_gitversion.h"
 #include <bctoolbox/vfs.h>
 
@@ -215,6 +215,7 @@ static const char *linphone_gtk_get_factory_config_file(void){
 		}
 	}
 	if (path) {
+		ms_message("Factory config file expected at %s", path);
 		//use factory file only if it exists
 		if (bctbx_file_exist(path)==0){
 			snprintf(_factory_config_file, sizeof(_factory_config_file), "%s", path);

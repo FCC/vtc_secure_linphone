@@ -2,10 +2,10 @@
 
 AM_CPPFLAGS=\
 	-I$(top_srcdir) \
+	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/coreapi
 
 COMMON_CFLAGS=\
-	-DIN_LINPHONE \
 	$(ORTP_CFLAGS) \
 	$(MEDIASTREAMER_CFLAGS) \
 	$(STRICT_OPTIONS) \

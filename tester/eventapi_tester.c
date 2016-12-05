@@ -18,10 +18,10 @@
 
 
 
-#include "linphonecore.h"
+#include "linphone/core.h"
 #include "private.h"
-#include "lpconfig.h"
-#include <event.h>
+#include "linphone/lpconfig.h"
+#include <linphone/event.h>
 #include "liblinphone_tester.h"
 
 static const char *subscribe_content="<somexml>blabla</somexml>";

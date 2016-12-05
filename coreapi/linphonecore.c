@@ -18,9 +18,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "linphonecore.h"
-#include "sipsetup.h"
-#include "lpconfig.h"
+#include "linphone/core.h"
+#include "linphone/sipsetup.h"
+#include "linphone/lpconfig.h"
 #include "private.h"
 #include "quality_reporting.h"
 #include "lime.h"
@@ -112,6 +112,7 @@ static void linphone_core_run_hooks(LinphoneCore *lc);
 
 const char *linphone_core_get_nat_address_resolved(LinphoneCore *lc);
 static void toggle_video_preview(LinphoneCore *lc, bool_t val);
+
 
 #if defined(LINPHONE_WINDOWS_PHONE) || defined(LINPHONE_WINDOWS_UNIVERSAL)
 #define SOUNDS_PREFIX "Assets/Sounds/"
@@ -1467,11 +1468,20 @@ bool_t linphone_core_adaptive_rate_control_enabled(const LinphoneCore *lc){
 }
 
 void linphone_core_set_adaptive_rate_algorithm(LinphoneCore *lc, const char* algorithm){
+	if (ms_qos_analyzer_algorithm_from_string(algorithm) != MSQosAnalyzerAlgorithmSimple) {
+		ms_warning("Unsupported adaptive rate algorithm [%s] on core [%p], using Simple",algorithm,lc);
+		linphone_core_set_adaptive_rate_algorithm(lc,ms_qos_analyzer_algorithm_to_string(MSQosAnalyzerAlgorithmSimple));
+		return;
+	}
 	lp_config_set_string(lc->config,"net","adaptive_rate_algorithm",algorithm);
 }
 
 const char * linphone_core_get_adaptive_rate_algorithm(const LinphoneCore *lc){
-	return lp_config_get_string(lc->config, "net", "adaptive_rate_algorithm", "Simple");
+	const char* saved_value = lp_config_get_string(lc->config, "net", "adaptive_rate_algorithm", "Simple");
+	if (ms_qos_analyzer_algorithm_from_string(saved_value) != MSQosAnalyzerAlgorithmSimple) {
+		ms_warning("Unsupported adaptive rate algorithm [%s] on core [%p], using Simple",saved_value,lc);
+	}
+	return ms_qos_analyzer_algorithm_to_string(MSQosAnalyzerAlgorithmSimple);
 }
 
 bool_t linphone_core_rtcp_enabled(const LinphoneCore *lc){
@@ -1901,6 +1911,7 @@ int linphone_core_set_primary_contact(LinphoneCore *lc, const char *contact)
 static void update_primary_contact(LinphoneCore *lc){
 	char *guessed=NULL;
 	char tmp[LINPHONE_IPADDR_SIZE];
+	int port;
 
 	LinphoneAddress *url;
 	if (lc->sip_conf.guessed_contact!=NULL){
@@ -1918,7 +1929,9 @@ static void update_primary_contact(LinphoneCore *lc){
 		lc->sip_conf.loopback_only=TRUE;
 	}else lc->sip_conf.loopback_only=FALSE;
 	linphone_address_set_domain(url,tmp);
-	linphone_address_set_port(url,linphone_core_get_sip_port(lc));
+	port = linphone_core_get_sip_port(lc);
+	if (port > 0) linphone_address_set_port(url, port); /*if there is no listening socket the primary contact is somewhat useless,
+		it won't work. But we prefer to return something in all cases. It at least shows username and ip address.*/
 	guessed=linphone_address_as_string(url);
 	lc->sip_conf.guessed_contact=guessed;
 	linphone_address_destroy(url);
@@ -2238,7 +2251,7 @@ void linphone_core_set_rtp_no_xmit_on_audio_mute(LinphoneCore *lc,bool_t rtp_no_
 
 /**
  * Sets the UDP port used for audio streaming.
- * A value if -1 will request the system to allocate the local port randomly.
+ * A value of -1 will request the system to allocate the local port randomly.
  * This is recommended in order to avoid firewall warnings.
  *
  * @ingroup network_parameters
@@ -2260,7 +2273,7 @@ void linphone_core_set_audio_port_range(LinphoneCore *lc, int min_port, int max_
 
 /**
  * Sets the UDP port used for video streaming.
- * A value if -1 will request the system to allocate the local port randomly.
+ * A value of -1 will request the system to allocate the local port randomly.
  * This is recommended in order to avoid firewall warnings.
  *
  * @ingroup network_parameters
@@ -2893,7 +2906,16 @@ void linphone_core_iterate(LinphoneCore *lc){
 
 LinphoneAddress * linphone_core_interpret_url(LinphoneCore *lc, const char *url){
 	LinphoneProxyConfig *proxy = linphone_core_get_default_proxy_config(lc);
-	return linphone_proxy_config_normalize_sip_uri(proxy, url);
+	LinphoneAddress *result=NULL;
+	
+	if (linphone_proxy_config_is_phone_number(proxy,url)) {
+		char *normalized_number = linphone_proxy_config_normalize_phone_number(proxy, url);
+		result = linphone_proxy_config_normalize_sip_uri(proxy, normalized_number);
+		ms_free(normalized_number);
+	} else {
+		result = linphone_proxy_config_normalize_sip_uri(proxy, url);
+	}
+	return result;
 }
 
 /**
@@ -5555,7 +5577,6 @@ static void toggle_video_preview(LinphoneCore *lc, bool_t val){
 				video_preview_set_native_window_id(lc->previewstream,lc->preview_window_id);
 			video_preview_set_fps(lc->previewstream,linphone_core_get_preferred_framerate(lc));
 			video_preview_start(lc->previewstream,lc->video_conf.device);
-			lc->previewstream->ms.factory = lc->factory;
 		}
 	}else{
 		if (lc->previewstream!=NULL){
@@ -5564,6 +5585,14 @@ static void toggle_video_preview(LinphoneCore *lc, bool_t val){
 		}
 	}
 #endif
+}
+
+static void relaunch_video_preview(LinphoneCore *lc){
+	if (lc->previewstream){
+		toggle_video_preview(lc,FALSE);
+	}
+	/* And nothing else, because linphone_core_iterate() will restart the preview stream if necessary.
+	 * This code will need to be revisited when linphone_core_iterate() will no longer be required*/
 }
 
 bool_t linphone_core_video_supported(LinphoneCore *lc){
@@ -5735,7 +5764,7 @@ int linphone_core_set_video_device(LinphoneCore *lc, const char *id){
 	if (lc->video_conf.device==NULL)
 		lc->video_conf.device=ms_web_cam_manager_get_default_cam(ms_factory_get_web_cam_manager(lc->factory));
 	if (olddev!=NULL && olddev!=lc->video_conf.device){
-		toggle_video_preview(lc,FALSE);/*restart the video local preview*/
+		relaunch_video_preview(lc);
 	}
 	if ( linphone_core_ready(lc) && lc->video_conf.device){
 		vd=ms_web_cam_get_string_id(lc->video_conf.device);
@@ -6091,10 +6120,11 @@ static bool_t video_size_supported(MSVideoSize vsize){
 	return FALSE;
 }
 
+
+
 static void update_preview_size(LinphoneCore *lc, MSVideoSize oldvsize, MSVideoSize vsize){
 	if (!ms_video_size_equal(oldvsize,vsize) && lc->previewstream!=NULL){
-		toggle_video_preview(lc,FALSE);
-		toggle_video_preview(lc,TRUE);
+		relaunch_video_preview(lc);
 	}
 }
 
@@ -6125,8 +6155,7 @@ void linphone_core_set_preview_video_size(LinphoneCore *lc, MSVideoSize vsize){
 	oldvsize=lc->video_conf.preview_vsize;
 	lc->video_conf.preview_vsize=vsize;
 	if (!ms_video_size_equal(oldvsize,vsize) && lc->previewstream!=NULL){
-		toggle_video_preview(lc,FALSE);
-		toggle_video_preview(lc,TRUE);
+		relaunch_video_preview(lc);
 	}
 	if (linphone_core_ready(lc))
 		lp_config_set_string(lc->config,"video","preview_size",video_size_get_name(vsize));

@@ -22,9 +22,9 @@
  *  Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
 
-#include "linphonecore.h"
+#include "linphone/core.h"
 #include "private.h"
-#include "lpconfig.h"
+#include "linphone/lpconfig.h"
 
 #ifdef SQLITE_STORAGE_ENABLED
 #ifndef _WIN32
@@ -109,12 +109,26 @@ static int friend_compare(const void * a, const void * b) {
 
 static LinphoneFriendPresence * find_presence_model_for_uri_or_tel(const LinphoneFriend *lf, const char *uri_or_tel) {
 	bctbx_list_t *iterator = lf->presence_models;
-	while (iterator) {
-		LinphoneFriendPresence *lfp = (LinphoneFriendPresence *)bctbx_list_get_data(iterator);
-		if (strcmp(lfp->uri_or_tel, uri_or_tel) == 0) return lfp;
-		iterator = bctbx_list_next(iterator);
+	LinphoneAddress *uri_or_tel_addr = linphone_core_interpret_url(lf->lc, uri_or_tel);
+	LinphoneFriendPresence *result=NULL;
+	if (!lf->lc) {
+		ms_warning("Cannot find uri of tel [%s] from friend [%p] because not associated to any Linphone core object",uri_or_tel,lf);
+		return NULL;
 	}
-	return NULL;
+	while (uri_or_tel_addr && iterator) {
+		LinphoneFriendPresence *lfp = (LinphoneFriendPresence *)bctbx_list_get_data(iterator);
+		LinphoneAddress *lfp_addr = linphone_core_interpret_url(lf->lc, lfp->uri_or_tel);
+		if (lfp_addr && linphone_address_weak_equal(uri_or_tel_addr, lfp_addr)) {
+			result = lfp;
+		}
+		if (lfp_addr) linphone_address_unref(lfp_addr);
+		if (result == NULL)
+			iterator = bctbx_list_next(iterator);
+		else
+			break;
+	}
+	if (uri_or_tel_addr) linphone_address_unref(uri_or_tel_addr);
+	return result;
 }
 
 static void add_presence_model_for_uri_or_tel(LinphoneFriend *lf, const char *uri_or_tel, LinphonePresenceModel *presence) {
@@ -727,7 +741,7 @@ void linphone_friend_apply(LinphoneFriend *fr, LinphoneCore *lc) {
 		}
 		fr->inc_subscribe_pending = FALSE;
 	}
-	
+
 	linphone_friend_update_subscribes(fr, linphone_core_should_subscribe_friends_only_when_registered(lc));
 
 	ms_debug("linphone_friend_apply() done.");
@@ -816,7 +830,7 @@ void linphone_core_send_initial_subscribes(LinphoneCore *lc) {
 
 	if (lc->initial_subscribes_sent) return;
 	lc->initial_subscribes_sent=TRUE;
-	
+
 	linphone_core_update_friends_subscriptions(lc);
 }
 
@@ -1221,7 +1235,7 @@ void linphone_core_friends_storage_init(LinphoneCore *lc) {
 	linphone_create_table(db);
 	if (linphone_update_table(db)) {
 		// After updating schema, database need to be closed/reopenned
-		sqlite3_close(lc->friends_db);
+		sqlite3_close(db);
 		_linphone_sqlite3_open(lc->friends_db_file, &db);
 	}
 
@@ -1412,7 +1426,7 @@ void linphone_core_store_friend_in_db(LinphoneCore *lc, LinphoneFriend *lf) {
 			);
 		}
 		if (addr_str != NULL) ms_free(addr_str);
-	
+
 		linphone_sql_request_generic(lc->friends_db, buf);
 		sqlite3_free(buf);
 
@@ -1669,8 +1683,18 @@ const char * linphone_friend_phone_number_to_sip_uri(LinphoneFriend *lf, const c
 
 	while (iterator) {
 		lfpnsu = (LinphoneFriendPhoneNumberSipUri *)bctbx_list_get_data(iterator);
-		if (strcmp(lfpnsu->number, phone_number) == 0) return lfpnsu->uri;
-		iterator = bctbx_list_next(iterator);
+		if (strcmp(lfpnsu->number, phone_number) == 0) {
+			/*force sip uri computation because proxy config may have changed, specially, ccc could have been added since last computation*/
+			free_phone_number_sip_uri(lfpnsu);
+			if (lf->phone_number_sip_uri_map == iterator) {
+				/*change list head if head is removed*/
+				iterator = lf->phone_number_sip_uri_map = bctbx_list_erase_link(lf->phone_number_sip_uri_map, iterator);
+			} else {
+				iterator = bctbx_list_erase_link(lf->phone_number_sip_uri_map, iterator);
+			}
+		} else {
+			iterator = bctbx_list_next(iterator);
+		}
 	}
 
 	proxy_config = linphone_core_get_default_proxy_config(linphone_friend_get_core(lf));
