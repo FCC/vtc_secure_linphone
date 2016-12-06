@@ -20,6 +20,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import android.content.Context;
 
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
+import org.linphone.core.OpenH264DownloadHelperListener;
+import org.linphone.mediastream.Log;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -28,11 +32,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.ArrayList;
-
-import org.apache.commons.compress.compressors.bzip2.*;
-import org.linphone.core.OpenH264DownloadHelperListener;
-import org.linphone.mediastream.Log;
 
 /**
  * @author Erwan Croze
@@ -45,12 +46,13 @@ public class OpenH264DownloadHelper {
     private String urlDownload;
     private String nameFileDownload;
     private String licenseMessage;
-
+    private String md5 = "b74e2afd04695908231fcca5c2457553";
 	/**
      * Default values
      * nameLib = "libopenh264-1.5.so"
      * urlDownload = "http://ciscobinary.openh264.org/libopenh264-1.5.0-android19.so.bz2"
      * nameFileDownload = "libopenh264-1.5.0-android19.so.bz2"
+     * md5 = "b74e2afd04695908231fcca5c2457553"
      */
     public OpenH264DownloadHelper(Context context) {
         userData = new ArrayList<Object>();
@@ -166,7 +168,7 @@ public class OpenH264DownloadHelper {
      * @return file exists ?
      */
     public boolean isCodecFound() {
-        return new File(fileDirection+"/" + nameLib).exists();
+        return getMD5Checksum(fileDirection+"/" + nameLib).equals(md5);
     }
 
 	/**
@@ -236,5 +238,48 @@ public class OpenH264DownloadHelper {
             }
         });
         thread.start();
+    }
+
+    public byte[] createChecksum(String filename){
+        InputStream fis = null;
+        MessageDigest complete = null;
+        try {
+            fis = new FileInputStream(filename);
+            complete = MessageDigest.getInstance("MD5");
+        }
+        catch(Throwable e){
+            return null;
+        }
+
+        byte[] buffer = new byte[1024];
+        int numRead;
+
+        try {
+            do {
+                numRead = fis.read(buffer);
+                if (numRead > 0) {
+                    complete.update(buffer, 0, numRead);
+                }
+            } while (numRead != -1);
+
+            fis.close();
+        }
+        catch(IOException e){
+            return null;
+        }
+        return complete.digest();
+    }
+
+    public String getMD5Checksum(String filename){
+        File file = new File(filename);
+        if(!file.exists()) return "";
+        byte[] b = createChecksum(filename);
+        if(b == null) return "";
+        String result = "";
+
+        for (int i=0; i < b.length; i++) {
+            result += Integer.toString( ( b[i] & 0xff ) + 0x100, 16).substring( 1 );
+        }
+        return result;
     }
 }
